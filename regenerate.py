@@ -93,7 +93,8 @@ def main():
     p.add_argument("--crop", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
                    default=[545, 60, 880, 560], help="crop region; use --no-crop to skip")
     p.add_argument("--no-crop", action="store_true")
-    p.add_argument("--big", type=int, default=40, help="columns for big portrait")
+    p.add_argument("--big", type=int, default=60, help="columns for big portrait")
+    p.add_argument("--medium", type=int, default=40, help="columns for medium portrait")
     p.add_argument("--tiny", type=int, default=20, help="columns for tiny portrait")
     p.add_argument("--target", default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                     "carmen_gloria.blob"))
@@ -102,7 +103,7 @@ def main():
     rgb, alpha = load(a.imagen, None if a.no_crop else a.crop)
 
     art = {}
-    for name, cols, contrast in [("big", a.big, 1.65), ("tiny", 20, 2.0)]:
+    for name, cols, contrast in [("big", a.big, 1.65), ("medium", a.medium, 1.85), ("tiny", 20, 2.0)]:
         art[name] = {
             "mono": to_ascii(rgb, alpha, cols, RAMP, contrast),
             "block": to_ascii(rgb, alpha, cols, "█" * 6, 1.0, color=True),

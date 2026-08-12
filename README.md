@@ -17,7 +17,8 @@ git log -1 --format=%s | python3 carmensay.py -b
 
 | Flag | What it does |
 |---|---|
-| `-b`, `--big` | big portrait, 40 columns |
+| `-b`, `--big` | big portrait, 60 columns |
+| `-m`, `--medium` | medium portrait, 40 columns (default) |
 | `-T`, `--tiny` | tiny portrait, 20 columns |
 | `-c`, `--color` | blocks + truecolor: almost the photo |
 | `-a`, `--ansi` | ASCII chars + truecolor |
@@ -28,7 +29,7 @@ git log -1 --format=%s | python3 carmensay.py -b
 
 Without flags it auto-detects: color with blocks if output is a compatible
 terminal, monochrome if redirected to a file or pipe. Respects `NO_COLOR`. Size
-adapts to terminal width (tiny below 50 columns, big otherwise).
+adapts to terminal width (tiny below 50, medium below 90, big otherwise).
 
 The `-c` mode needs a truecolor (24-bit) terminal: iTerm2, Kitty, Alacritty,
 WezTerm, GNOME Terminal, Windows Terminal. If it looks off, use `-a` instead.
