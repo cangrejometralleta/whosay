@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-regenerar.py — vuelve a generar el arte embebido en carmensay.py.
+regenerar.py — regenerates the embedded art in carmensay.py.
 
-Sirve para cambiar la foto, el recorte o los parametros de conversion.
+Use this to change the photo, crop, or conversion parameters.
 
     pip install pillow numpy
-    python3 regenerar.py foto.png --crop 545 60 880 560
+    python3 regenerar.py photo.png --crop 545 60 880 560
 
-El script reescribe carmen_gloria.blob en la misma carpeta.
+The script rewrites carmen_gloria.blob in the same directory.
 """
 import argparse
 import base64
@@ -19,13 +19,13 @@ import zlib
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-RAMP = "@%#*+=-:. "   # oscuro -> claro (tinta sobre papel: modo monocromo)
-RAMP_INV = " .:-=+*#%@"  # claro -> denso (modo ansi, para terminal de fondo oscuro)
-CHAR_AR = 0.46        # relacion alto/ancho de una celda de terminal
+RAMP = "@%#*+=-:. "   # dark -> light (ink on paper: monochrome mode)
+RAMP_INV = " .:-=+*#%@"  # light -> dense (ansi mode, for dark terminals)
+CHAR_AR = 0.46        # terminal cell aspect ratio (height/width)
 
 
 def load(src, box=None, sharpen=True):
-    """Devuelve (rgb, alpha). Lo transparente se compone sobre blanco."""
+    """Returns (rgb, alpha). Transparent areas are composited on white."""
     im = Image.open(src).convert("RGBA")
     if box:
         im = im.crop(tuple(box))
@@ -40,7 +40,7 @@ def load(src, box=None, sharpen=True):
 
 def to_ascii(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
              color=False, amin=150, white=246, boost=1.0):
-    """Convierte la imagen en una lista de lineas de texto (con ANSI si color=True)."""
+    """Convert the image to a list of text lines (with ANSI if color=True)."""
     w, h = rgb.size
     rows = max(1, int(round(cols * (h / w) * CHAR_AR)))
     small = rgb.resize((cols, rows), Image.LANCZOS)
@@ -51,7 +51,7 @@ def to_ascii(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
     lum = np.power(np.asarray(g).astype(float) / 255.0, gamma)
 
     px = np.asarray(small).astype(float)
-    if boost != 1.0:  # levanta los medios tonos para que el color se vea en terminal
+    if boost != 1.0:  # boost midtones so colors show better in the terminal
         px = 255.0 * np.power(px / 255.0, boost)
     px = np.clip(px, 0, 255).astype(int)
 
@@ -88,13 +88,13 @@ def to_ascii(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
 
 
 def main():
-    p = argparse.ArgumentParser(description="Regenera el arte de carmensay.py")
-    p.add_argument("imagen", help="PNG de origen (idealmente con fondo transparente)")
+    p = argparse.ArgumentParser(description="Regenerate carmensay.py art")
+    p.add_argument("imagen", help="source PNG (ideally with transparent background)")
     p.add_argument("--crop", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
-                   default=[545, 60, 880, 560], help="recorte; usa --no-crop para omitir")
+                   default=[545, 60, 880, 560], help="crop region; use --no-crop to skip")
     p.add_argument("--no-crop", action="store_true")
-    p.add_argument("--big", type=int, default=76, help="columnas del retrato detallado")
-    p.add_argument("--small", type=int, default=40, help="columnas del retrato compacto")
+    p.add_argument("--big", type=int, default=76, help="columns for detailed portrait")
+    p.add_argument("--small", type=int, default=40, help="columns for compact portrait")
     p.add_argument("--target", default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                     "carmen_gloria.blob"))
     a = p.parse_args()
@@ -108,14 +108,14 @@ def main():
             "block": to_ascii(rgb, alpha, cols, "█" * 6, 1.0, color=True),
             "ansi": to_ascii(rgb, alpha, cols, RAMP_INV, 1.5, color=True, boost=0.42),
         }
-        print("%-6s %d columnas x %d filas" % (name, cols, len(art[name]["mono"])))
+        print("%-6s %d cols x %d rows" % (name, cols, len(art[name]["mono"])))
 
     blob = base64.b64encode(
         zlib.compress(json.dumps(art, separators=(",", ":")).encode(), 9)
     ).decode()
 
     open(a.target, "w", encoding="ascii").write(blob)
-    print("arte actualizado en", a.target)
+    print("art updated in", a.target)
 
 
 if __name__ == "__main__":

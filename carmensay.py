@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-carmensay — como cowsay, pero con Carmen Gloria.
+carmensay — like cowsay, but with Carmen Gloria.
 
-Uso:
-    carmensay "Hola, buenas tardes"
-    echo "texto desde una tuberia" | carmensay
-    carmensay -s "version compacta"
-    carmensay -t "esto lo estoy pensando"
-    carmensay --plain            # solo el retrato, sin globo
+Usage:
+    carmensay "Hello, good afternoon"
+    echo "text from a pipe" | carmensay
+    carmensay -s "compact version"
+    carmensay -t "thinking out loud"
+    carmensay --plain            # portrait only, no bubble
 
-Opciones principales:
-    -T/--tiny    retrato diminuto (20 col)
-    -s/--small   retrato compacto (40 col)
-    -b/--big     retrato detallado (76 col)
-    -c/--color   color truecolor con bloques (parecido a la foto)
-    -a/--ansi    color truecolor con caracteres ASCII
-    -n/--no-color  monocromo (ASCII clasico)
-    -t/--think   globo de pensamiento
-    -W N         ancho del texto (default 40)
-    --plain      imprimir solo el retrato
+Options:
+    -T/--tiny    tiny portrait (20 col)
+    -s/--small   compact portrait (40 col)
+    -b/--big     detailed portrait (76 col)
+    -c/--color   truecolor with block chars (photo-like)
+    -a/--ansi    truecolor with ASCII chars
+    -n/--no-color  monochrome (classic ASCII)
+    -t/--think   thought bubble
+    -W N         text width (default 40)
+    --plain      print portrait only
 
-Sin flags de color, elige automaticamente: color si la salida es un
-terminal compatible, monocromo si se redirige a un archivo o tuberia.
+Without color flags, it auto-detects: color if output is a compatible
+terminal, monochrome if redirected to a file or pipe.
 """
 import argparse
 import base64
@@ -35,7 +35,7 @@ import zlib
 
 __version__ = "1.0"
 
-# Arte generado desde carmen_gloria_transparente.png (zlib+base64)
+# Art generated from carmen_gloria_transparente.png (zlib+base64)
 def _blob_path():
     if getattr(sys, "frozen", False):
         base = sys._MEIPASS
@@ -55,11 +55,11 @@ def art(size, mode):
     return _cache[size][mode]
 
 
-# ---------------------------------------------------------------- globo
+# ----------------------------------------------------------------- bubble
 
 
 def bubble(text, width=40, think=False):
-    """Devuelve las lineas del globo de dialogo estilo cowsay."""
+    """Return the lines of a cowsay-style speech/thought bubble."""
     paras = text.expandtabs().split("\n")
     lines = []
     for p in paras:
@@ -95,7 +95,7 @@ def tail(think, indent):
     return [pad + "   \\", pad + "    \\"]
 
 
-# ---------------------------------------------------------------- salida
+# ----------------------------------------------------------------- output
 
 
 def pick_mode(flag):
@@ -120,24 +120,24 @@ def pick_size(flag):
 def main(argv=None):
     p = argparse.ArgumentParser(
         prog="carmensay",
-        description="Como cowsay, pero con Carmen Gloria.",
+        description="Like cowsay, but with Carmen Gloria.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("text", nargs="*", help="texto a decir (si se omite, lee stdin)")
+    p.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
     g = p.add_mutually_exclusive_group()
     g.add_argument("-T", "--tiny", action="store_const", const="tiny", dest="size")
     g.add_argument("-s", "--small", action="store_const", const="small", dest="size")
     g.add_argument("-b", "--big", action="store_const", const="big", dest="size")
     c = p.add_mutually_exclusive_group()
     c.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
-                   help="color truecolor con bloques (parecido a la foto)")
+                   help="truecolor with block chars (photo-like)")
     c.add_argument("-a", "--ansi", action="store_const", const="ansi", dest="mode",
-                   help="color truecolor con caracteres ASCII")
+                   help="truecolor with ASCII chars")
     c.add_argument("-n", "--no-color", action="store_const", const="mono", dest="mode",
-                   help="monocromo, ASCII clasico")
-    p.add_argument("-t", "--think", action="store_true", help="globo de pensamiento")
-    p.add_argument("-W", "--width", type=int, default=40, help="ancho del texto")
-    p.add_argument("--plain", action="store_true", help="solo el retrato")
+                   help="monochrome, classic ASCII")
+    p.add_argument("-t", "--think", action="store_true", help="thought bubble")
+    p.add_argument("-W", "--width", type=int, default=40, help="text width")
+    p.add_argument("--plain", action="store_true", help="portrait only")
     p.add_argument("--version", action="version", version="carmensay " + __version__)
     a = p.parse_args(argv)
 

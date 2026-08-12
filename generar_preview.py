@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera carmensay-preview.png con los tres modos lado a lado."""
+"""Generate carmensay-preview.png with the three modes side by side."""
 import re
 import subprocess
 
@@ -35,7 +35,7 @@ def find_font():
 
 
 def parse_ansi(text):
-    """Devuelve lista de (char, rgb) donde rgb es None para default."""
+    """Return list of (char, rgb) where rgb is None for default color."""
     result = []
     current_color = None
     i = 0
@@ -128,7 +128,7 @@ def main():
         x += im.width
 
     composite.save("carmensay-preview.png")
-    print("Preview guardado en carmensay-preview.png")
+    print("Preview saved to carmensay-preview.png")
 
 
 if __name__ == "__main__":
