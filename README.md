@@ -1,6 +1,6 @@
 # carmensay
 
-Like `cowsay`, but with Carmen Gloria. A zero-dependency Python script that
+Like `cowsay`, but with Carmen Gloria Arroyo. A zero-dependency Python script that
 prints a speech bubble over an ASCII portrait.
 
 ![preview](carmensay-preview.png)
@@ -19,7 +19,7 @@ git log -1 --format=%s | python3 carmensay.py -b
 |---|---|
 | `-b`, `--big` | big portrait, 60 columns |
 | `-m`, `--medium` | medium portrait, 40 columns (default) |
-| `-T`, `--tiny` | tiny portrait, 20 columns |
+| `-s`, `--small` | small portrait, 20 columns |
 | `-c`, `--color` | blocks + truecolor: almost the photo |
 | `-a`, `--ansi` | ASCII chars + truecolor |
 | `-n`, `--no-color` | monochrome, classic ASCII |
@@ -29,7 +29,7 @@ git log -1 --format=%s | python3 carmensay.py -b
 
 Without flags it auto-detects: color with blocks if output is a compatible
 terminal, monochrome if redirected to a file or pipe. Respects `NO_COLOR`. Size
-adapts to terminal width (tiny below 50, medium below 90, big otherwise).
+adapts to terminal width (small below 50, medium below 90, big otherwise).
 
 The `-c` mode needs a truecolor (24-bit) terminal: iTerm2, Kitty, Alacritty,
 WezTerm, GNOME Terminal, Windows Terminal. If it looks off, use `-a` instead.
@@ -60,13 +60,20 @@ sudo cp dist/carmensay /usr/local/bin/
 carmensay "Hello from a binary"
 ```
 
+Or, without root, drop it in `~/.local/bin`:
+
+```bash
+cp dist/carmensay ~/.local/bin/carmensay
+carmensay "Hello from a binary"
+```
+
 The code uses `sys._MEIPASS` to find the blob inside the bundle, falling back to
 the loose file in the script's directory during development.
 
 To greet you on terminal start, add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-carmentsay -b "Good morning, $USER"
+carmensay -b "Good morning, $USER"
 ```
 
 ## Changing the photo
@@ -83,7 +90,7 @@ python3 regenerate.py my_photo.png --crop 545 60 880 560
 The script produces three render modes (monochrome, truecolor blocks, truecolor
 ASCII) at both sizes automatically. Works best with a transparent-background
 PNG: the alpha channel cuts out the silhouette. Use `--no-crop` for the full
-image, and `--big` / `--tiny` to tweak the column width of each version.
+image, and `--big` / `--small` to tweak the column width of each version.
 
 ## Generating the preview
 

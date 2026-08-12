@@ -12,7 +12,7 @@ Usage:
     carmensay --plain            # portrait only, no bubble
 
 Options:
-    -T/--tiny     tiny portrait (20 col)
+    -s/--small    small portrait (20 col)
     -m/--medium   medium portrait (40 col, default)
     -b/--big      big portrait (60 col)
     -c/--color   truecolor with block chars (photo-like)
@@ -114,7 +114,7 @@ def pick_size(flag):
         return flag
     cols = shutil.get_terminal_size((80, 24)).columns
     if cols < 50:
-        return "tiny"
+        return "small"
     if cols < 90:
         return "medium"
     return "big"
@@ -128,7 +128,7 @@ def main(argv=None):
     )
     p.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
     g = p.add_mutually_exclusive_group()
-    g.add_argument("-T", "--tiny", action="store_const", const="tiny", dest="size")
+    g.add_argument("-s", "--small", action="store_const", const="small", dest="size")
     g.add_argument("-m", "--medium", action="store_const", const="medium", dest="size")
     g.add_argument("-b", "--big", action="store_const", const="big", dest="size")
     c = p.add_mutually_exclusive_group()
@@ -155,7 +155,7 @@ def main(argv=None):
     if not text.strip():
         text = "..."
 
-    indent = {"tiny": 2, "medium": 4, "big": 6}[size]
+    indent = {"small": 2, "medium": 4, "big": 6}[size]
     pad = " " * indent
     for l in bubble(text, a.width, a.think):
         print(pad + l)
