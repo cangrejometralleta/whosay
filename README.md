@@ -17,8 +17,8 @@ git log -1 --format=%s | python3 carmensay.py -s
 
 | Flag | What it does |
 |---|---|
-| `-s`, `--small` | compact portrait, 40 columns |
-| `-b`, `--big` | detailed portrait, 76 columns |
+| `-b`, `--big` | big portrait, 40 columns |
+| `-T`, `--tiny` | tiny portrait, 20 columns |
 | `-c`, `--color` | blocks + truecolor: almost the photo |
 | `-a`, `--ansi` | ASCII chars + truecolor |
 | `-n`, `--no-color` | monochrome, classic ASCII |
@@ -65,7 +65,7 @@ the loose file in the script's directory during development.
 To greet you on terminal start, add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-carmensay -s "Good morning, $USER"
+carmentsay -b "Good morning, $USER"
 ```
 
 ## Changing the photo

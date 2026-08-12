@@ -6,14 +6,13 @@ carmensay — like cowsay, but with Carmen Gloria.
 Usage:
     carmensay "Hello, good afternoon"
     echo "text from a pipe" | carmensay
-    carmensay -s "compact version"
+    carmensay -b "big version"
     carmensay -t "thinking out loud"
     carmensay --plain            # portrait only, no bubble
 
 Options:
     -T/--tiny    tiny portrait (20 col)
-    -s/--small   compact portrait (40 col)
-    -b/--big     detailed portrait (76 col)
+    -b/--big     big portrait (40 col)
     -c/--color   truecolor with block chars (photo-like)
     -a/--ansi    truecolor with ASCII chars
     -n/--no-color  monochrome (classic ASCII)
@@ -114,7 +113,7 @@ def pick_size(flag):
     cols = shutil.get_terminal_size((80, 24)).columns
     if cols < 50:
         return "tiny"
-    return "small" if cols < 80 else "big"
+    return "big"
 
 
 def main(argv=None):
@@ -126,7 +125,6 @@ def main(argv=None):
     p.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
     g = p.add_mutually_exclusive_group()
     g.add_argument("-T", "--tiny", action="store_const", const="tiny", dest="size")
-    g.add_argument("-s", "--small", action="store_const", const="small", dest="size")
     g.add_argument("-b", "--big", action="store_const", const="big", dest="size")
     c = p.add_mutually_exclusive_group()
     c.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
@@ -152,7 +150,7 @@ def main(argv=None):
     if not text.strip():
         text = "..."
 
-    indent = 2 if size == "tiny" else (4 if size == "small" else 10)
+    indent = 2 if size == "tiny" else 4
     pad = " " * indent
     for l in bubble(text, a.width, a.think):
         print(pad + l)
