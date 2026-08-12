@@ -1,90 +1,98 @@
 # carmensay
 
-Como `cowsay`, pero con Carmen Gloria. Un script de Python sin dependencias que
-imprime un globo de diálogo sobre un retrato en ASCII.
+Like `cowsay`, but with Carmen Gloria. A zero-dependency Python script that
+prints a speech bubble over an ASCII portrait.
 
 ![preview](carmensay-preview.png)
 
-## Uso
+## Usage
 
 ```bash
-python3 carmensay.py "Hola, buenas tardes"
-echo "texto por tubería" | python3 carmensay.py
+python3 carmensay.py "Hello, good afternoon"
+echo "text from a pipe" | python3 carmensay.py
 git log -1 --format=%s | python3 carmensay.py -s
 ```
 
-## Opciones
+## Options
 
-| Flag | Qué hace |
+| Flag | What it does |
 |---|---|
-| `-s`, `--small` | retrato compacto, 40 columnas |
-| `-b`, `--big` | retrato detallado, 76 columnas |
-| `-c`, `--color` | bloques + truecolor: casi la foto |
-| `-a`, `--ansi` | caracteres ASCII + truecolor |
-| `-n`, `--no-color` | monocromo, ASCII clásico |
-| `-t`, `--think` | globo de pensamiento |
-| `-W N` | ancho del texto (por defecto 40) |
-| `--plain` | solo el retrato, sin globo |
+| `-s`, `--small` | compact portrait, 40 columns |
+| `-b`, `--big` | detailed portrait, 76 columns |
+| `-c`, `--color` | blocks + truecolor: almost the photo |
+| `-a`, `--ansi` | ASCII chars + truecolor |
+| `-n`, `--no-color` | monochrome, classic ASCII |
+| `-t`, `--think` | thought bubble |
+| `-W N` | text width (default 40) |
+| `--plain` | portrait only, no bubble |
 
-Sin flags elige solo: color con bloques si la salida es un terminal compatible,
-monocromo si se redirige a un archivo o tubería. Respeta `NO_COLOR`. El tamaño
-se ajusta al ancho del terminal (compacto bajo 80 columnas).
+Without flags it auto-detects: color with blocks if output is a compatible
+terminal, monochrome if redirected to a file or pipe. Respects `NO_COLOR`. Size
+adapts to terminal width (compact below 80 columns).
 
-El modo `-c` necesita un terminal con truecolor (24 bits): iTerm2, Kitty,
-Alacritty, WezTerm, GNOME Terminal, Windows Terminal. Si se ve mal, usa `-a`.
+The `-c` mode needs a truecolor (24-bit) terminal: iTerm2, Kitty, Alacritty,
+WezTerm, GNOME Terminal, Windows Terminal. If it looks off, use `-a` instead.
 
-## Instalar como comando
+## Install as a command
 
 ```bash
 mkdir -p ~/.local/bin
 ln -sf "$PWD/carmensay.py" ~/.local/bin/carmensay
-# asegúrate de que ~/.local/bin esté en tu PATH
-carmensay "ya funciona"
+# make sure ~/.local/bin is in your PATH
+carmensay "it works"
 ```
 
-### Compilar a binario standalone
+### Compile to standalone binary
 
-Se puede generar un binario sin dependencias con PyInstaller:
+You can build a self-contained binary with PyInstaller:
 
 ```bash
 pip install pyinstaller
 pyinstaller --onefile --add-data "carmen_gloria.blob:." carmensay.py
 ```
 
-El binario queda en `dist/carmensay`. Copialo a cualquier carpeta del `PATH` y
-listo — no necesita Python, Pillow ni el blob suelto.
+The binary lands in `dist/carmensay`. Copy it to any `PATH` folder — no Python,
+Pillow, or standalone blob needed.
 
 ```bash
 sudo cp dist/carmensay /usr/local/bin/
-carmensay "Hola desde un binario"
+carmensay "Hello from a binary"
 ```
 
-El código usa `sys._MEIPASS` para encontrar el blob dentro del bundle, y como
-fallback lee el archivo suelto del directorio del script en modo desarrollo.
+The code uses `sys._MEIPASS` to find the blob inside the bundle, falling back to
+the loose file in the script's directory during development.
 
-Para que salude al abrir la terminal, agrega a `~/.bashrc` o `~/.zshrc`:
+To greet you on terminal start, add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-carmensay -s "Buenos días, $USER"
+carmensay -s "Good morning, $USER"
 ```
 
-## Cambiar la foto
+## Changing the photo
 
-`regenerar.py` reconstruye el arte embebido dentro de `carmensay.py`. Necesita
-`pillow` y `numpy`.
+`regenerate.py` rebuilds the art embedded inside `carmensay.py`. It needs
+`pillow` and `numpy`.
 
 ```bash
 pip install pillow numpy
-python3 regenerar.py otra_foto.png --crop 545 60 880 560
+python3 regenerate.py another_photo.png --crop 545 60 880 560
 ```
 
-Funciona mejor con un PNG de fondo transparente: el canal alfa se usa para
-recortar la silueta. Con `--no-crop` toma la imagen completa; `--big` y
-`--small` cambian el ancho en columnas de cada versión.
+Works best with a transparent-background PNG: the alpha channel is used to
+cut out the silhouette. `--no-crop` takes the full image; `--big` and
+`--small` change the column width of each version.
 
-## Archivos
+## Generating the preview
 
-- `carmensay.py` — el script (arte incluido, sin dependencias)
-- `regenerar.py` — regenera el arte desde otra imagen
-- `carmen-gloria-ascii-76col.txt` / `-40col.txt` — el retrato en texto plano
-- `carmensay-preview.png` — los tres modos lado a lado
+```bash
+pip install pillow
+python3 generate_preview.py
+```
+
+## Files
+
+- `carmensay.py` — the script (art included, no dependencies)
+- `regenerate.py` — regenerates the art from another image
+- `generate_preview.py` — renders the three modes side by side into a PNG
+- `carmen-gloria-ascii-76col.txt` / `-40col.txt` — plain-text portrait
+- `carmensay-preview.png` — the three modes side by side

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-regenerar.py — regenerates the embedded art in carmensay.py.
+regenerate.py — regenerates the embedded art in carmensay.py.
 
 Use this to change the photo, crop, or conversion parameters.
 
     pip install pillow numpy
-    python3 regenerar.py photo.png --crop 545 60 880 560
+    python3 regenerate.py photo.png --crop 545 60 880 560
 
 The script rewrites carmen_gloria.blob in the same directory.
 """

@@ -35,7 +35,7 @@ import zlib
 
 __version__ = "1.0"
 
-# Art generated from carmen_gloria_transparente.png (zlib+base64)
+# Art generated from carmen_gloria_transparent.png (zlib+base64)
 def _blob_path():
     if getattr(sys, "frozen", False):
         base = sys._MEIPASS
