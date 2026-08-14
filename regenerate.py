@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-regenerate.py — regenerates the embedded art in carmensay.py.
+regenerate.py — regenerates a whosay character's art.
 
-Use this to change the photo, crop, or conversion parameters.
+Use this to change a character's photo, crop, or conversion parameters, or
+to add a brand-new character.
 
     pip install pillow numpy
-    python3 regenerate.py photo.png --crop 545 60 880 560
+    python3 regenerate.py photo.png --character carmen_gloria --crop 545 60 880 560
 
-The script rewrites carmen_gloria.blob in the same directory.
+The script writes characters/<character>/art.blob. For a new character, also
+create characters/<character>/character.json with display_name, persona,
+joke_prompt and (optionally) a fallback line — see characters/carmen_gloria/
+for an example.
 """
 import argparse
 import base64
@@ -88,22 +92,27 @@ def to_ascii(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
 
 
 def main():
-    p = argparse.ArgumentParser(description="Regenerate carmensay.py art")
+    p = argparse.ArgumentParser(description="Regenerate a whosay character's art")
     p.add_argument("imagen", help="source PNG (ideally with transparent background)")
+    p.add_argument("--character", default="carmen_gloria",
+                   help="character folder under characters/ (default carmen_gloria)")
     p.add_argument("--crop", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
                    default=[545, 60, 880, 560], help="crop region; use --no-crop to skip")
     p.add_argument("--no-crop", action="store_true")
-    p.add_argument("--big", type=int, default=60, help="columns for big portrait")
     p.add_argument("--medium", type=int, default=40, help="columns for medium portrait")
     p.add_argument("--small", type=int, default=20, help="columns for small portrait")
-    p.add_argument("--target", default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                                    "carmen_gloria.blob"))
+    p.add_argument("--target", default=None,
+                   help="override the blob path (default: characters/<character>/art.blob)")
     a = p.parse_args()
+
+    target = a.target or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "characters", a.character, "art.blob")
+    os.makedirs(os.path.dirname(target), exist_ok=True)
 
     rgb, alpha = load(a.imagen, None if a.no_crop else a.crop)
 
     art = {}
-    for name, cols, contrast in [("big", a.big, 1.65), ("medium", a.medium, 1.85), ("small", a.small, 2.0)]:
+    for name, cols, contrast in [("medium", a.medium, 1.85), ("small", a.small, 2.0)]:
         art[name] = {
             "mono": to_ascii(rgb, alpha, cols, RAMP, contrast),
             "block": to_ascii(rgb, alpha, cols, "█" * 6, 1.0, color=True),
@@ -115,8 +124,8 @@ def main():
         zlib.compress(json.dumps(art, separators=(",", ":")).encode(), 9)
     ).decode()
 
-    open(a.target, "w", encoding="ascii").write(blob)
-    print("art updated in", a.target)
+    open(target, "w", encoding="ascii").write(blob)
+    print("art updated in", target)
 
 
 if __name__ == "__main__":

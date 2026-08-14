@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate carmensay-preview.png with the three modes side by side."""
+"""Generate whosay-preview.png with the three modes side by side."""
 import re
 import subprocess
 
@@ -111,7 +111,7 @@ def main():
 
     for flag, label in MODES:
         result = subprocess.run(
-            ["python3", "carmensay.py", flag, SAMPLE_TEXT],
+            ["python3", "whosay.py", flag, SAMPLE_TEXT],
             capture_output=True, text=True,
         )
         img = render_to_image(result.stdout, font)
@@ -127,8 +127,8 @@ def main():
         composite.paste(im, (x, 0))
         x += im.width
 
-    composite.save("carmensay-preview.png")
-    print("Preview saved to carmensay-preview.png")
+    composite.save("whosay-preview.png")
+    print("Preview saved to whosay-preview.png")
 
 
 if __name__ == "__main__":
