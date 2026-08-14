@@ -1,0 +1,11 @@
+# Source/likeness images stay local — only art.blob (the converted ASCII
+# art) and character.json are meant to be redistributed through git.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+*.tiff
+*.tif
+*.heic

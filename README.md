@@ -4,14 +4,14 @@ Like `cowsay`, but with a cast of characters — Carmen Gloria Arroyo is the
 default and most iconic one, but not the only one possible. A zero-dependency
 Python script that prints a speech bubble over an ASCII portrait.
 
-![preview](whosay-preview.png)
+![terminal example: whonews -C st_ignucius](whonews-preview.png)
 
 ## Usage
 
 ```bash
 python3 whosay.py "Hello, good afternoon"
 echo "text from a pipe" | python3 whosay.py
-git log -1 --format=%s | python3 whosay.py -m
+git log -1 --format=%s | python3 whosay.py -b
 python3 whosay.py -C some_other_character "hi"
 python3 whosay.py --list-characters
 ```
@@ -22,8 +22,10 @@ python3 whosay.py --list-characters
 |---|---|
 | `-C`, `--character NAME` | which character to draw (default `carmen_gloria`) |
 | `--list-characters` | list the available characters and exit |
-| `-s`, `--small` | small portrait, 20 columns (default) |
-| `-m`, `--medium` | medium portrait, 40 columns |
+| `--random` | pick a random character |
+| `-s`, `--small` | small portrait, 14 columns |
+| `-m`, `--medium` | medium portrait, 20 columns (default) |
+| `-b`, `--big` | big portrait, 40 columns |
 | `-c`, `--color` | blocks + truecolor: almost the photo |
 | `-a`, `--ansi` | ASCII chars + truecolor |
 | `-n`, `--no-color` | monochrome, classic ASCII |
@@ -100,11 +102,15 @@ whosay -m "Good morning, $USER"
 
 ## The news anchor: `whonews.py`
 
-Pulls the day's top stories from Google News RSS and, half the time, asks a
-local model through [Ollama](https://ollama.com) for a one-line take — in a
-character's voice — about one of them picked at random. The other half, it
-skips the news and the character just cracks a sarcastic joke instead. Either
-way, prints one panel through `whosay`. Stdlib only — no extra dependencies.
+Pulls the day's top stories from Google News RSS and, 70% of the time by
+default, asks a local model through [Ollama](https://ollama.com) for a
+one-line take — in a character's voice — about one of them picked at random.
+10% of the time it skips the news and the character just cracks a sarcastic
+joke; 10% the character invents a brief anecdote in its own style, starring
+itself alongside up to two other random characters; and the remaining 10%, it
+just drops its signature phrase. `--joke-chance`, `--anecdote-chance` and
+`--signature-chance` change the split. Either way, prints one panel through
+`whosay`. Stdlib only — no extra dependencies.
 
 ```bash
 ollama serve &            # if it isn't already running
@@ -112,7 +118,8 @@ python3 whonews.py        # one random take, Chile
 ```
 
 ```
-UDI advierte al INDH con "consecuencias" por eventual visita a reos de cárcel de Talca (BioBioChile)
+Noticias con Carmen Gloria
+2026-08-14  UDI advierte al INDH con "consecuencias" por eventual visita a reos de cárcel de Talca (BioBioChile)
    __________________________________________
   / El miedo institucional es el mejor       \
   | aliado de un régimen que niega la verdad |
@@ -123,10 +130,10 @@ UDI advierte al INDH con "consecuencias" por eventual visita a reos de cárcel d
    ...
 ```
 
-or, the other half of the time, no headline at all:
+or, the other 10% of the time, no headline at all:
 
 ```
-Carmen Gloria improvisa:
+Chiste con Carmen Gloria
    __________________________________________
   / ¿Sabes por qué Chile está tan            \
   | emocionado? Porque finalmente            |
@@ -138,14 +145,59 @@ Carmen Gloria improvisa:
    ...
 ```
 
+and, the remaining 10% of the time, a brief anecdote in the character's own
+style, starring itself and up to two other characters picked at random:
+
+```
+Anécdota con Carmen Gloria
+   __________________________________________
+  / Estoy asustada ante las puertas de la    \
+  | catedral de Salamanca, donde se iba a    |
+  | reunir el congreso de teóricos           |
+  | cristianos. Me sentí vencida ante el     |
+  | pasado y su religión en lugar de poder   |
+  | tomar mi lugar como una activista        |
+  \ política en contra del imperialismo.     /
+   ------------------------------------------
+     \
+      \
+   ...
+```
+
+and the last 10%, the character just drops its signature phrase:
+
+```
+The catchphrase of Ozzy Osbourne
+   _________
+  < SHARON! >
+   ---------
+     \
+      \
+   ...
+```
+
+The header line and the date are printed bold/colored when the terminal
+supports it. `--headlines` prints the same header + dated headline (no
+opinion); `--history` prints the same dated headline per archived entry,
+without the header. The header's language comes from the character's
+`language` field (see [Characters](#characters)) — `"News with
+{display_name}"` / `"Joke with {display_name}"` / `"Anecdote with
+{display_name}"` / `"The catchphrase of {display_name}"` for `"English"`,
+`"Notícias com {display_name}"` / `"Piada com {display_name}"` /
+`"Anedota com {display_name}"` / `"A frase de {display_name}"` for
+`"Portuguese"`, and the Spanish text above otherwise.
+
 | Flag | What it does |
 |---|---|
 | `-n N` | pool size to pick a headline from at random (default 5) |
 | `-C`, `--character NAME` | which character comments (default `carmen_gloria`) |
+| `--random` | pick a random character |
 | `--topic NAME` | Google News section: `world`, `nation`, `business`, `technology`, `science`, `sports`, `entertainment`, `health` |
-| `--query TEXT` | search a term instead of browsing a section |
-| `--region CODE` / `--lang CODE` | Google News country and language (default `CL`, `es-419`) |
-| `--model NAME` | Ollama model (default `gemma3:4b`) |
+| `--query TEXT` | search a term instead of browsing a section (default: the character's `topic` field) |
+| `--region CODE` | Google News country code (default: from the character's `nationality`, else `CL`) |
+| `--lang CODE` | language code (default: from the character's `language`, else `es-419`) |
+| `--provider NAME` | `ollama`, `anthropic` or `openai` (default `$WHONEWS_PROVIDER` or `ollama`) |
+| `--model NAME` | model for the chosen provider (default `$WHONEWS_MODEL`, else the provider's own default) |
 | `--headlines` | skip the model, just print one random headline |
 | `--timeout SEC` | model timeout (default 120) |
 | `--refresh` | ignore the cache: re-fetch the feed and re-ask the model |
@@ -153,22 +205,53 @@ Carmen Gloria improvisa:
 | `--ttl MIN` | how long a cached feed stays fresh (default 15) |
 | `--db PATH` | cache location |
 | `--history [N]` | print the last N archived takes for the selected character (default 10) and exit |
-| `--prune DAYS` | drop takes older than DAYS (default 365, `0` keeps everything) |
+| `--prune DAYS` | drop takes older than DAYS (default 7, `0` keeps everything) |
+| `--joke-chance P` | chance (0-1) of a standalone joke instead of a news take (default 0.1) |
+| `--anecdote-chance P` | chance (0-1) the character tells a brief anecdote with up to two other random characters instead (default 0.1) |
+| `--signature-chance P` | chance (0-1) the character just drops its signature phrase instead (default 0.1) |
+| `--signature` | always print the character's signature phrase and exit |
+| `--anecdote [NAME ...]` | always tell a brief anecdote and exit; optionally list which characters star in it (default: up to two random) |
 
-It also takes the `whosay` look flags: `-s`/`-m`, `-c`/`-a`/`--no-color`, `-W`.
+It also takes the `whosay` look flags: `-s`/`-m`/`-b`, `-c`/`-a`/`--no-color`, `-W`.
 
-Defaults can come from the environment: `WHONEWS_MODEL`, `WHONEWS_REGION`,
-`WHONEWS_LANG`, `WHONEWS_DB`, plus `OLLAMA_HOST` if your daemon isn't on
-`127.0.0.1:11434`.
+A character's `nationality`, `language` and `topic` fields (see
+[Characters](#characters) below) drive the region, language and default
+search query — `--region`, `--lang` and `--query` override them per run.
+
+Defaults can come from the environment: `WHONEWS_PROVIDER`, `WHONEWS_MODEL`,
+`WHONEWS_REGION`, `WHONEWS_LANG`, `WHONEWS_DB`, plus `OLLAMA_HOST` if your
+daemon isn't on `127.0.0.1:11434`.
 
 ```bash
 WHONEWS_MODEL=gemma3:4b python3 whonews.py -n 3 --topic technology
 python3 whonews.py --query "arte contemporáneo" --region AR --lang es-419
 python3 whonews.py -C some_other_character
+python3 whonews.py --joke-chance 0.5   # jokes half the time instead of 10%
+python3 whonews.py --provider anthropic
+python3 whonews.py --provider openai --model gpt-4o
 ```
 
-Reasoning-capable models are asked with `think: false` — otherwise they spend
-the whole token budget thinking and hand back an empty answer.
+Reasoning-capable Ollama models are asked with `think: false` — otherwise
+they spend the whole token budget thinking and hand back an empty answer.
+This only applies to the `ollama` provider.
+
+### Providers
+
+`whonews.py` talks to three interchangeable AI backends, picked with
+`--provider` (or `$WHONEWS_PROVIDER`):
+
+| Provider | Default model | Credential |
+|---|---|---|
+| `ollama` (default) | `llama3.2:1b` — small and fast, see [Picking a model](#picking-a-model) | none — talks to a local `ollama serve`, `$OLLAMA_HOST` if not on `127.0.0.1:11434` |
+| `anthropic` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` env var |
+| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` env var |
+
+`--model` overrides the provider's default (as does `$WHONEWS_MODEL`, applied
+regardless of provider — unset it if you switch providers and it's still
+pointing at an Ollama model name). Anthropic and OpenAI cost real money per
+call and need network access; Ollama is free and local, which is why it
+stays the default. Missing or wrong credentials fail with a one-line error
+on stderr — no traceback, no accidental retry loop.
 
 ### The cache
 
@@ -178,9 +261,9 @@ Feeds and opinions live in a SQLite file at `~/.cache/whosay/news.db`
 - `feeds` — the raw RSS body per URL, reused for `--ttl` minutes and pruned
   after a day. Keeps repeated runs from hammering Google. Shared by every
   character, since headlines don't depend on who's commenting on them.
-- `takes` — one opinion per `(headline, model, character)`, kept for a year.
-  This is where the real saving is: replaying a stored take costs
-  milliseconds instead of a model call.
+- `takes` — one opinion per `(headline, model, character)`, kept for a week
+  by default. This is where the real saving is: replaying a stored take
+  costs milliseconds instead of a model call.
 
 Pruning runs on every invocation, before anything else touches the cache, and
 says on stderr how many rows it dropped. `--prune 0` turns it off and keeps the
@@ -194,32 +277,28 @@ python3 whonews.py --history  # the archive, oldest headlines and all
 ```
 
 `--history` doubles as the conversation archive: every opinion a character has
-given in the last year, with its headline and timestamp. If the cache file can't
-be opened the tool says so on stderr and keeps working without it.
+given (within the `--prune` window, a week by default), with its headline and
+timestamp. If the cache file can't be opened the tool says so on stderr and
+keeps working without it.
 
 ### Picking a model
 
-The default is `gemma3:4b`, chosen for latency: this is a terminal toy, and it
-has to answer at terminal speed. Measured on a modest GPU, three headlines each,
-model unloaded first:
-
-| Model | First call (loads into VRAM) | Per headline after that | Spread |
-|---|---|---|---|
-| `gemma3:4b` | 20.7 s | **3.9 s** | 3.7–4.1 s |
-| `gemma4:latest` | 12.5 s | **35.4 s** | 12.5–44.9 s |
-
-`gemma4` writes the sharper line, but it's a reasoning model: nine times slower
-warm, and unpredictable — you can't tell whether a headline will take 12 seconds
-or 45. `gemma3:4b` answers in the same four seconds every time, which is what
-makes it usable while you wait at a prompt.
+The default is `llama3.2:1b`, picked over larger models for speed and memory:
+this is a terminal toy, and it has to answer at terminal speed while staying
+light on VRAM and RAM. It's not the wittiest model in the world, but it's
+instant and runs comfortably on a modest GPU (or even without a strong one).
+If you want sharper takes and don't mind the wait, point `$WHONEWS_MODEL` at a
+bigger model — the cache key is `(headline, model, character)`, so switching
+doesn't throw away what you already generated:
 
 ```bash
+WHONEWS_MODEL=gemma3:4b python3 whonews.py   # sharper takes, slower
 WHONEWS_MODEL=gemma4:latest python3 whonews.py   # when you're not in a hurry
 ```
 
-Takes from both models coexist in the cache — the key is
-`(headline, model, character)` — so switching doesn't throw away what you
-already generated.
+`gemma4` writes the sharper line, but it's a reasoning model: an order of
+magnitude slower, and unpredictable — you can't tell whether a headline will
+take 12 seconds or 45.
 
 The opinions are generated by a language model as a parody. They are not quotes
 from, or endorsed by, any real person.
@@ -233,26 +312,75 @@ Everything that makes a character who they are lives under
 characters/
   carmen_gloria/
     art.blob          # the ASCII portrait, all sizes and color modes
-    character.json     # display_name, persona, joke_prompt, fallback
-    photo.png           # (optional) the source photo art.blob was built from
+    character.json     # display_name, nationality, topic, language,
+                        # persona, joke_prompt, fallback
+    photo.png           # (optional, local only) the source photo
+                        # art.blob was built from
 ```
+
+### Why source photos aren't in git
+
+`art.blob` is the only likeness-derived file this repo redistributes. The
+photo a character's art was built from (`photo.png`, or whatever you drop in
+before running `regenerate.py`) stays on your machine and is never committed:
+
+- It's someone's actual photograph — real, identifiable, usually not taken
+  or owned by whoever is adding the character. Publishing it through a
+  public git repo (and its full history) is a rights/licensing exposure that
+  `art.blob` — a heavily abstracted, transformed ASCII derivative — mostly
+  sidesteps.
+- Every `characters/<name>/` folder has its own `.gitignore` (any image
+  extension: `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.webp`, `.tiff`,
+  `.tif`, `.heic`), plus a root-level `characters/*/photo.*` rule as a
+  backstop. `regenerate.py` writes that per-folder `.gitignore` itself
+  (`ensure_gitignore()`) whenever it creates or touches a character folder,
+  so a new character gets the same protection automatically — nothing to
+  remember by hand.
+- Practical upshot: keep your source photo around locally so you can re-run
+  `regenerate.py` later (different crop, different sizes, a cleaner cutout),
+  but it never needs to leave your disk for the character to work.
 
 `character.json` looks like this:
 
 ```json
 {
   "display_name": "Carmen Gloria",
+  "nationality": "Chilean",
+  "topic": "Latin American politics and cultural criticism",
+  "language": "Spanish",
   "persona": "Eres Carmen Gloria: periodista y crítica cultural...",
   "joke_prompt": "Cuenta un chiste corto y sarcástico sobre...",
-  "fallback": "Prefiero no comentar. Y eso ya es un comentario."
+  "fallback": "Prefiero no comentar. Y eso ya es un comentario.",
+  "signature": "¡Que pase la psicóloga Pamela Lagos!"
 }
 ```
 
+- `nationality` — looked up in `whonews.py`'s `NATIONALITY_REGION` table to
+  pick a default `--region` (e.g. `"Chilean"` → `CL`). Falls back to `CL` if
+  the nationality is missing or not in the table.
+- `topic` — the character's beat; used as the default `--query` whenever a
+  run doesn't pass `--topic` or `--query` explicitly.
+- `language` — looked up in `whonews.py`'s `LANGUAGE_CODE` table to pick a
+  default `--lang` (e.g. `"Spanish"` → `es-419`), and in its `LABELS` table
+  to pick the "News with .../Joke with ..." header language. Falls back to
+  `es-419` and Spanish labels.
 - `persona` — the system prompt that gives `whonews.py` its voice when
   commenting on a headline.
 - `joke_prompt` — what's asked when the character skips the news for a
   standalone joke instead.
 - `fallback` — printed if the model comes back with nothing to say.
+- `signature` — a fixed catchphrase the character drops instead of a take,
+  joke or anecdote on `--signature-chance` (default 0.1) of runs. Optional.
+
+`nationality`, `topic` and `language` are optional — a character without
+them just falls back to `CL`/`es-419` and browses the default Google News
+feed instead of a topic search. Any `--region`/`--lang`/`--query` flag (or
+`WHONEWS_REGION`/`WHONEWS_LANG` env var) passed at the command line wins
+over what's in `character.json`.
+
+Adding a nationality or language outside the existing tables means adding an
+entry to `NATIONALITY_REGION` / `LANGUAGE_CODE` / `LABELS` near the top of
+`whonews.py` first.
 
 `whosay --list-characters` lists every folder under `characters/` that has an
 `art.blob`; both `whosay.py` and `whonews.py` take `-C`/`--character NAME` to
@@ -267,10 +395,11 @@ pick one (default `carmen_gloria`).
    python3 regenerate.py my_photo.png --character nuevo_personaje --crop 545 60 880 560
    ```
 
-   This writes `characters/nuevo_personaje/art.blob`. Works best with a
-   transparent-background PNG: the alpha channel cuts out the silhouette. Use
-   `--no-crop` for the full image, and `--medium`/`--small` to tweak the
-   column width of each size.
+   This writes `characters/nuevo_personaje/art.blob`, with all three sizes —
+   `--small` (14 col), `--medium` (20 col) and `--big` (40 col) — baked in.
+   Works best with a transparent-background PNG: the alpha channel cuts out
+   the silhouette. Use `--no-crop` for the full image, and `--small`/
+   `--medium`/`--big` to tweak the column width of each size.
 
 2. Write `characters/nuevo_personaje/character.json` (see the format above).
    `whonews.py` will refuse to run against a character that's missing this
@@ -281,19 +410,10 @@ whosay -C nuevo_personaje "probando"
 whonews -C nuevo_personaje
 ```
 
-## Generating the preview
-
-```bash
-pip install pillow
-python3 generate_preview.py
-```
-
 ## Files
 
 - `whosay.py` — the portrait/bubble renderer, character-agnostic (no dependencies)
 - `whonews.py` — Google News + a local model, read out loud by a character
 - `characters/` — one folder per character: art, persona, joke prompt
-- `schema.sql` — the SQLite schema `whonews.py` caches into
 - `regenerate.py` — regenerates a character's art from a photo
-- `generate_preview.py` — renders the three color modes side by side into a PNG
-- `whosay-preview.png` — the three modes side by side
+- `whonews-preview.png` — example terminal output, shown at the top of this file

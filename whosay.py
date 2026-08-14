@@ -10,13 +10,16 @@ Usage:
     whosay -t "thinking out loud"
     whosay -C some_character "hi"
     whosay --list-characters
+    whosay --random "surprise me"
     whosay --plain            # portrait only, no bubble
 
 Options:
     -C, --character NAME  which character to draw (default: carmen_gloria)
     --list-characters      list the available characters and exit
-    -s/--small    small portrait (20 col, default)
-    -m/--medium   medium portrait (40 col)
+    --random               pick a random character
+    -s/--small    small portrait (14 col)
+    -m/--medium   medium portrait (20 col, default)
+    -b/--big      big portrait (40 col)
     -c/--color   truecolor with block chars (photo-like)
     -a/--ansi    truecolor with ASCII chars
     -n/--no-color  monochrome (classic ASCII)
@@ -33,6 +36,7 @@ import argparse
 import base64
 import json
 import os
+import random
 import sys
 import textwrap
 import zlib
@@ -135,13 +139,17 @@ def pick_mode(flag):
 
 
 def pick_size(flag):
-    return flag or "small"
+    return flag or "medium"
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(
         prog="whosay",
         description="Like cowsay, but with a cast of characters.",
+        epilog="example:\n"
+               "  whosay -C ozzy 'bloody hell'\n"
+               "  echo 'what a scorcher' | whosay -C carmen_gloria -a -b\n"
+               "  whosay --random -t 'is this thing on?'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
@@ -149,9 +157,15 @@ def main(argv=None):
                    help="which character to draw (default: carmen_gloria)")
     p.add_argument("--list-characters", action="store_true",
                    help="list the available characters and exit")
+    p.add_argument("--random", action="store_true",
+                   help="pick a random character")
     g = p.add_mutually_exclusive_group()
-    g.add_argument("-s", "--small", action="store_const", const="small", dest="size")
-    g.add_argument("-m", "--medium", action="store_const", const="medium", dest="size")
+    g.add_argument("-s", "--small", action="store_const", const="small", dest="size",
+                   help="20-column portrait")
+    g.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
+                   help="40-column portrait (default)")
+    g.add_argument("-b", "--big", action="store_const", const="big", dest="size",
+                   help="60-column portrait")
     c = p.add_mutually_exclusive_group()
     c.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
                    help="truecolor with block chars (photo-like)")
@@ -173,9 +187,18 @@ def main(argv=None):
         print("\n".join(chars))
         return 0
 
+    character = a.character
+    if a.random:
+        chars = list_characters()
+        if not chars:
+            print("whosay: no characters found in characters/", file=sys.stderr)
+            return 1
+        character = random.choice(chars)
+        print("whosay: character: {}".format(character), file=sys.stderr)
+
     size = pick_size(a.size)
     try:
-        portrait = art(a.character, size, pick_mode(a.mode))
+        portrait = art(character, size, pick_mode(a.mode))
     except CharacterNotFound as e:
         print("whosay: {}".format(e), file=sys.stderr)
         return 1
@@ -188,7 +211,7 @@ def main(argv=None):
     if not text.strip():
         text = "..."
 
-    indent = {"small": 2, "medium": 4}[size]
+    indent = {"small": 1, "medium": 2, "big": 4}[size]
     pad = " " * indent
     for l in bubble(text, a.width, a.think):
         print(pad + l)

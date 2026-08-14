@@ -3,3 +3,7 @@ dist/
 *.spec
 __pycache__/
 .claude/
+
+# Source photos are someone's likeness — don't redistribute them through git.
+# Only the converted art.blob (an abstracted ASCII derivative) is tracked.
+characters/*/photo.*
