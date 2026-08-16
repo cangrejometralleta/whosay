@@ -23,9 +23,9 @@ python3 whosay.py --list-characters
 | `-C`, `--character NAME` | which character to draw (default `carmen_gloria`) |
 | `--list-characters` | list the available characters and exit |
 | `--random` | pick a random character |
-| `-s`, `--small` | small portrait, 14 columns |
-| `-m`, `--medium` | medium portrait, 20 columns (default) |
-| `-b`, `--big` | big portrait, 40 columns |
+| `-s`, `--small` | small portrait, 20 columns (default) |
+| `-m`, `--medium` | medium portrait, 40 columns |
+| `-b`, `--big` | big portrait, 60 columns |
 | `-c`, `--color` | blocks + truecolor: almost the photo |
 | `-a`, `--ansi` | ASCII chars + truecolor |
 | `-n`, `--no-color` | monochrome, classic ASCII |
@@ -316,6 +316,11 @@ characters/
                         # persona, joke_prompt, fallback
     photo.png           # (optional, local only) the source photo
                         # art.blob was built from
+  pamela_lagos/
+    art.blob
+    character.json
+    photo.png
+  # ...one folder like this per character
 ```
 
 ### Why source photos aren't in git
@@ -354,6 +359,26 @@ before running `regenerate.py`) stays on your machine and is never committed:
   "signature": "¡Que pase la psicóloga Pamela Lagos!"
 }
 ```
+
+For example, `pamela_lagos` — a Chilean psychologist (magíster en psicobiología
+y neurociencia cognitiva) who reads the news through a warm, evidence-based,
+mental-health lens:
+
+```json
+{
+  "display_name": "Pamela Lagos",
+  "nationality": "Chilean",
+  "topic": "salud mental, neurociencia, inteligencia artificial y actualidad",
+  "language": "Spanish",
+  "persona": "Eres Pamela Lagos: psicóloga chilena, magíster en psicobiología y neurociencia cognitiva...",
+  "joke_prompt": "Cuenta un chiste breve y cariñoso sobre psicología, neurociencia, terapia o la vida moderna...",
+  "fallback": "Prefiero escuchar antes que opinar. Y eso ya es una opinión.",
+  "signature": "Respiremos hondo: todo pasa por el cerebro."
+}
+```
+
+Her `topic` makes her default search cover Chilean and world affairs plus AI and
+mental health, so `whonews -C pamela_lagos` tends to land on those beats.
 
 - `nationality` — looked up in `whonews.py`'s `NATIONALITY_REGION` table to
   pick a default `--region` (e.g. `"Chilean"` → `CL`). Falls back to `CL` if
@@ -396,7 +421,7 @@ pick one (default `carmen_gloria`).
    ```
 
    This writes `characters/nuevo_personaje/art.blob`, with all three sizes —
-   `--small` (14 col), `--medium` (20 col) and `--big` (40 col) — baked in.
+   `--small` (20 col), `--medium` (40 col) and `--big` (60 col) — baked in.
    Works best with a transparent-background PNG: the alpha channel cuts out
    the silhouette. Use `--no-crop` for the full image, and `--small`/
    `--medium`/`--big` to tweak the column width of each size.

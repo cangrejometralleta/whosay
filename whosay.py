@@ -6,7 +6,7 @@ whosay — like cowsay, but with a cast of characters (Carmen Gloria by default)
 Usage:
     whosay "Hello, good afternoon"
     echo "text from a pipe" | whosay
-    whosay -m "medium version"
+    whosay -s "small version"
     whosay -t "thinking out loud"
     whosay -C some_character "hi"
     whosay --list-characters
@@ -17,9 +17,9 @@ Options:
     -C, --character NAME  which character to draw (default: carmen_gloria)
     --list-characters      list the available characters and exit
     --random               pick a random character
-    -s/--small    small portrait (14 col)
-    -m/--medium   medium portrait (20 col, default)
-    -b/--big      big portrait (40 col)
+    -s/--small    small portrait (20 col, default)
+    -m/--medium   medium portrait (40 col)
+    -b/--big      big portrait (60 col)
     -c/--color   truecolor with block chars (photo-like)
     -a/--ansi    truecolor with ASCII chars
     -n/--no-color  monochrome (classic ASCII)
@@ -42,6 +42,12 @@ import textwrap
 import zlib
 
 __version__ = "1.0"
+
+# ------------------------------------------------------------------ defaults
+DEFAULT_CHARACTER = "carmen_gloria"
+DEFAULT_SIZE = "small"  # 20 columns
+DEFAULT_WIDTH = 40
+INDENT = {"small": 1, "medium": 2, "big": 4}
 
 
 class CharacterNotFound(Exception):
@@ -88,7 +94,7 @@ def art(character, size, mode):
 # ----------------------------------------------------------------- bubble
 
 
-def bubble(text, width=40, think=False):
+def bubble(text, width=DEFAULT_WIDTH, think=False):
     """Return the lines of a cowsay-style speech/thought bubble."""
     paras = text.expandtabs().split("\n")
     lines = []
@@ -139,7 +145,7 @@ def pick_mode(flag):
 
 
 def pick_size(flag):
-    return flag or "medium"
+    return flag or DEFAULT_SIZE
 
 
 def main(argv=None):
@@ -153,17 +159,18 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
-    p.add_argument("-C", "--character", default="carmen_gloria",
-                   help="which character to draw (default: carmen_gloria)")
+    chars = list_characters()
+    p.add_argument("-C", "--character", default=DEFAULT_CHARACTER, choices=chars or None,
+                   help="which character to draw (default: {})".format(DEFAULT_CHARACTER))
     p.add_argument("--list-characters", action="store_true",
                    help="list the available characters and exit")
     p.add_argument("--random", action="store_true",
                    help="pick a random character")
     g = p.add_mutually_exclusive_group()
     g.add_argument("-s", "--small", action="store_const", const="small", dest="size",
-                   help="20-column portrait")
+                   help="20-column portrait (default)")
     g.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
-                   help="40-column portrait (default)")
+                   help="40-column portrait")
     g.add_argument("-b", "--big", action="store_const", const="big", dest="size",
                    help="60-column portrait")
     c = p.add_mutually_exclusive_group()
@@ -174,7 +181,7 @@ def main(argv=None):
     c.add_argument("-n", "--no-color", action="store_const", const="mono", dest="mode",
                    help="monochrome, classic ASCII")
     p.add_argument("-t", "--think", action="store_true", help="thought bubble")
-    p.add_argument("-W", "--width", type=int, default=40, help="text width")
+    p.add_argument("-W", "--width", type=int, default=DEFAULT_WIDTH, help="text width")
     p.add_argument("--plain", action="store_true", help="portrait only")
     p.add_argument("--version", action="version", version="whosay " + __version__)
     a = p.parse_args(argv)
@@ -211,7 +218,7 @@ def main(argv=None):
     if not text.strip():
         text = "..."
 
-    indent = {"small": 1, "medium": 2, "big": 4}[size]
+    indent = INDENT[size]
     pad = " " * indent
     for l in bubble(text, a.width, a.think):
         print(pad + l)
