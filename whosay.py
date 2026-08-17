@@ -54,7 +54,8 @@ class CharacterNotFound(Exception):
     pass
 
 
-def _characters_dir():
+def _resolve_characters_dir():
+    """ResolveCharactersDir Returns the characters/ Directory, inside the frozen Bundle or beside the script."""
     if getattr(sys, "frozen", False):
         base = sys._MEIPASS
     else:
@@ -63,7 +64,8 @@ def _characters_dir():
 
 
 def list_characters():
-    base = _characters_dir()
+    """ListCharacters Returns every character Name that has an art.blob, sorted."""
+    base = _resolve_characters_dir()
     try:
         return sorted(
             name for name in os.listdir(base)
@@ -76,10 +78,13 @@ def list_characters():
 _art_cache = {}
 
 
-def art(character, size, mode):
-    """mode: 'mono' | 'block' | 'ansi'"""
+def load_character_art(character, size, mode):
+    """LoadCharacterArt Returns the cached ascii Frame for this character/size/mode, decoding the Blob once.
+
+    mode: 'mono' | 'block' | 'ansi'
+    """
     if character not in _art_cache:
-        path = os.path.join(_characters_dir(), character, "art.blob")
+        path = os.path.join(_resolve_characters_dir(), character, "art.blob")
         try:
             with open(path, encoding="ascii") as f:
                 blob = f.read()
@@ -94,8 +99,8 @@ def art(character, size, mode):
 # ----------------------------------------------------------------- bubble
 
 
-def bubble(text, width=DEFAULT_WIDTH, think=False):
-    """Return the lines of a cowsay-style speech/thought bubble."""
+def render_speech_bubble(text, width=DEFAULT_WIDTH, think=False):
+    """RenderSpeechBubble Wraps text to width, then Returns the cowsay-style Lines of a speech/thought bubble."""
     paras = text.expandtabs().split("\n")
     lines = []
     for p in paras:
@@ -124,7 +129,8 @@ def bubble(text, width=DEFAULT_WIDTH, think=False):
     return out
 
 
-def tail(think, indent):
+def render_bubble_tail(think, indent):
+    """RenderBubbleTail Returns the two-line Tail connecting a speech or thought bubble to the Portrait."""
     pad = " " * indent
     if think:
         return [pad + "   o", pad + "    o"]
@@ -135,6 +141,7 @@ def tail(think, indent):
 
 
 def pick_mode(flag):
+    """PickMode Returns flag if given, else auto-detects mono/block from the terminal Environment."""
     if flag:
         return flag
     if os.environ.get("NO_COLOR") or not sys.stdout.isatty():
@@ -145,11 +152,13 @@ def pick_mode(flag):
 
 
 def pick_size(flag):
+    """PickSize Returns flag if given, else the default portrait Size."""
     return flag or DEFAULT_SIZE
 
 
-def main(argv=None):
-    p = argparse.ArgumentParser(
+def parse_whosay_args(argv):
+    """ParseWhosayArgs Builds the Cli parser, then Returns the parsed Args."""
+    parser = argparse.ArgumentParser(
         prog="whosay",
         description="Like cowsay, but with a cast of characters.",
         epilog="example:\n"
@@ -158,72 +167,91 @@ def main(argv=None):
                "  whosay --random -t 'is this thing on?'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
+    parser.add_argument("text", nargs="*", help="text to speak (reads stdin if omitted)")
     chars = list_characters()
-    p.add_argument("-C", "--character", default=DEFAULT_CHARACTER, choices=chars or None,
-                   help="which character to draw (default: {})".format(DEFAULT_CHARACTER))
-    p.add_argument("--list-characters", action="store_true",
-                   help="list the available characters and exit")
-    p.add_argument("--random", action="store_true",
-                   help="pick a random character")
-    g = p.add_mutually_exclusive_group()
-    g.add_argument("-s", "--small", action="store_const", const="small", dest="size",
-                   help="20-column portrait (default)")
-    g.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
-                   help="40-column portrait")
-    g.add_argument("-b", "--big", action="store_const", const="big", dest="size",
-                   help="60-column portrait")
-    c = p.add_mutually_exclusive_group()
-    c.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
-                   help="truecolor with block chars (photo-like)")
-    c.add_argument("-a", "--ansi", action="store_const", const="ansi", dest="mode",
-                   help="truecolor with ASCII chars")
-    c.add_argument("-n", "--no-color", action="store_const", const="mono", dest="mode",
-                   help="monochrome, classic ASCII")
-    p.add_argument("-t", "--think", action="store_true", help="thought bubble")
-    p.add_argument("-W", "--width", type=int, default=DEFAULT_WIDTH, help="text width")
-    p.add_argument("--plain", action="store_true", help="portrait only")
-    p.add_argument("--version", action="version", version="whosay " + __version__)
-    a = p.parse_args(argv)
+    parser.add_argument("-C", "--character", default=DEFAULT_CHARACTER, choices=chars or None,
+                         help="which character to draw (default: {})".format(DEFAULT_CHARACTER))
+    parser.add_argument("--list-characters", action="store_true",
+                         help="list the available characters and exit")
+    parser.add_argument("--random", action="store_true",
+                         help="pick a random character")
+    size_group = parser.add_mutually_exclusive_group()
+    size_group.add_argument("-s", "--small", action="store_const", const="small", dest="size",
+                             help="20-column portrait (default)")
+    size_group.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
+                             help="40-column portrait")
+    size_group.add_argument("-b", "--big", action="store_const", const="big", dest="size",
+                             help="60-column portrait")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
+                             help="truecolor with block chars (photo-like)")
+    mode_group.add_argument("-a", "--ansi", action="store_const", const="ansi", dest="mode",
+                             help="truecolor with ASCII chars")
+    mode_group.add_argument("-n", "--no-color", action="store_const", const="mono", dest="mode",
+                             help="monochrome, classic ASCII")
+    parser.add_argument("-t", "--think", action="store_true", help="thought bubble")
+    parser.add_argument("-W", "--width", type=int, default=DEFAULT_WIDTH, help="text width")
+    parser.add_argument("--plain", action="store_true", help="portrait only")
+    parser.add_argument("--version", action="version", version="whosay " + __version__)
+    return parser.parse_args(argv)
 
-    if a.list_characters:
-        chars = list_characters()
-        if not chars:
-            print("whosay: no characters found in characters/", file=sys.stderr)
-            return 1
-        print("\n".join(chars))
-        return 0
 
-    character = a.character
-    if a.random:
-        chars = list_characters()
-        if not chars:
-            print("whosay: no characters found in characters/", file=sys.stderr)
-            return 1
-        character = random.choice(chars)
-        print("whosay: character: {}".format(character), file=sys.stderr)
-
-    size = pick_size(a.size)
-    try:
-        portrait = art(character, size, pick_mode(a.mode))
-    except CharacterNotFound as e:
-        print("whosay: {}".format(e), file=sys.stderr)
+def print_character_roster():
+    """PrintCharacterRoster Lists every known Character, or Reports there are none."""
+    chars = list_characters()
+    if not chars:
+        print("whosay: no characters found in characters/", file=sys.stderr)
         return 1
+    print("\n".join(chars))
+    return 0
 
-    if a.plain:
-        print("\n".join(portrait))
-        return 0
 
-    text = " ".join(a.text) if a.text else sys.stdin.read().rstrip("\n")
+def resolve_character_choice(args):
+    """ResolveCharacterChoice Returns the requested Character, or a random one when args.random is set."""
+    if not args.random:
+        return args.character
+    chars = list_characters()
+    if not chars:
+        raise CharacterNotFound("no characters found in characters/")
+    character = random.choice(chars)
+    print("whosay: character: {}".format(character), file=sys.stderr)
+    return character
+
+
+def print_character_bubble(portrait, size, args):
+    """PrintCharacterBubble Prints the speech Bubble for args.text (or stdin) above the character Portrait."""
+    text = " ".join(args.text) if args.text else sys.stdin.read().rstrip("\n")
     if not text.strip():
         text = "..."
 
     indent = INDENT[size]
     pad = " " * indent
-    for l in bubble(text, a.width, a.think):
-        print(pad + l)
-    print("\n".join(tail(a.think, indent)))
+    for line in render_speech_bubble(text, args.width, args.think):
+        print(pad + line)
+    print("\n".join(render_bubble_tail(args.think, indent)))
     print("\n".join(portrait))
+
+
+def main(argv=None):
+    """Main Parses the Args, Resolves the Character and Portrait, then Prints the whosay Panel."""
+    args = parse_whosay_args(argv)
+
+    if args.list_characters:
+        return print_character_roster()
+
+    try:
+        character = resolve_character_choice(args)
+        size = pick_size(args.size)
+        portrait = load_character_art(character, size, pick_mode(args.mode))
+    except CharacterNotFound as e:
+        print("whosay: {}".format(e), file=sys.stderr)
+        return 1
+
+    if args.plain:
+        print("\n".join(portrait))
+        return 0
+
+    print_character_bubble(portrait, size, args)
     return 0
 
 
