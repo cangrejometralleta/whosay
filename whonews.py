@@ -153,6 +153,300 @@ LABELS = {
 }
 
 
+def main(argv=None):
+    """Main Parses the Args, Resolves the Character and Session, then Runs the matching whonews Command."""
+    args = parse_whonews_args(argv)
+
+    try:
+        character, char = resolve_requested_character(args)
+    except whosay.CharacterNotFound as e:
+        print("whonews: {}".format(e), file=sys.stderr)
+        return 1
+
+    session = build_news_session(character, char, args)
+
+    if args.signature:
+        return run_signature_command(session)
+    if args.anecdote is not None:
+        return run_anecdote_command(session, args.anecdote or None)
+    if args.history is not None:
+        return run_history_command(session, args.history)
+
+    return run_news_command(session, args)
+
+
+def parse_whonews_args(argv):
+    """ParseWhonewsArgs Builds the Cli parser, then Returns the parsed Args."""
+    parser = argparse.ArgumentParser(
+        prog="whonews",
+        description="The day's headlines, with a character's opinion (parody).",
+        epilog="example:\n"
+               "  whonews -C ozzy -n 3\n"
+               "  whonews --topic technology -a -b\n"
+               "  whonews --anecdote carmen_gloria\n"
+               "  whonews --history 10",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("-n", "--count", type=int, default=DEFAULT_COUNT, help="how many stories")
+    chars = whosay.list_characters()
+    parser.add_argument("-C", "--character", default=DEFAULT_CHARACTER, choices=chars or None,
+                         help="which character comments (default: {})".format(DEFAULT_CHARACTER))
+    parser.add_argument("--random", action="store_true",
+                         help="pick a random character")
+    parser.add_argument("--topic", choices=[s.lower() for s in SECTIONS] + list(SECTIONS),
+                         help="Google News section")
+    parser.add_argument("--query", help="search term instead of a section "
+                         "(default: the character's favorite topic)")
+    parser.add_argument("--region", default=None,
+                         help="country code for Google News "
+                              "(default: from the character's nationality, else {})".format(DEFAULT_REGION))
+    parser.add_argument("--lang", default=None,
+                         help="language code (default: from the character's "
+                              "language, else {})".format(DEFAULT_LANG))
+    parser.add_argument("--provider", choices=list(PROVIDERS),
+                         default=os.environ.get("WHONEWS_PROVIDER", DEFAULT_PROVIDER),
+                         help="AI backend: ollama, anthropic or openai "
+                              "(default $WHONEWS_PROVIDER or {})".format(DEFAULT_PROVIDER))
+    parser.add_argument("--model", default=None,
+                         help="model name (default: $WHONEWS_MODEL, else the "
+                              "provider's own default)")
+    parser.add_argument("--headlines", action="store_true", help="skip the model")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="model timeout (s)")
+    parser.add_argument("--db", default=resolve_db_path(), help="cache location")
+    parser.add_argument("--ttl", type=float, default=DEFAULT_TTL_MIN,
+                         help="feed freshness (minutes, default {} = 1 day)".format(DEFAULT_TTL_MIN))
+    parser.add_argument("--refresh", action="store_true", help="re-fetch and re-ask")
+    parser.add_argument("--no-cache", action="store_true", help="ignore the cache entirely")
+    parser.add_argument("--history", nargs="?", type=int, const=DEFAULT_HISTORY_N, metavar="N",
+                         help="print the last N archived takes and exit")
+    parser.add_argument("--prune", type=float, default=TAKE_KEEP_DAYS, metavar="DAYS",
+                         help="drop takes older than DAYS (default {}, 0 keeps all)".format(TAKE_KEEP_DAYS))
+    parser.add_argument("--joke-chance", type=float, default=JOKE_CHANCE, metavar="P",
+                         help="chance (0-1) of a standalone joke instead of a news "
+                              "take (default {})".format(JOKE_CHANCE))
+    parser.add_argument("--anecdote-chance", type=float, default=ANECDOTE_CHANCE, metavar="P",
+                         help="chance (0-1) the character tells a brief anecdote "
+                              "with another character instead (default {})".format(ANECDOTE_CHANCE))
+    parser.add_argument("--signature-chance", type=float, default=SIGNATURE_CHANCE, metavar="P",
+                         help="chance (0-1) the character just drops its signature "
+                              "phrase instead (default {})".format(SIGNATURE_CHANCE))
+    parser.add_argument("--signature", action="store_true",
+                         help="always print the character's signature phrase and exit")
+    parser.add_argument("--anecdote", nargs="?", const="", default=None, metavar="NAME",
+                         choices=chars or None,
+                         help="always tell a brief anecdote and exit; optionally give "
+                              "which character stars in it (default: one random)")
+    size_group = parser.add_mutually_exclusive_group()
+    size_group.add_argument("-s", "--small", action="store_const", const="small", dest="size",
+                             help="20-column portrait (default)")
+    size_group.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
+                             help="40-column portrait")
+    size_group.add_argument("-b", "--big", action="store_const", const="big", dest="size",
+                             help="60-column portrait")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
+                             help="truecolor with block chars (photo-like)")
+    mode_group.add_argument("-a", "--ansi", action="store_const", const="ansi", dest="mode",
+                             help="truecolor with ASCII chars")
+    mode_group.add_argument("--no-color", action="store_const", const="mono", dest="mode",
+                             help="monochrome, classic ASCII")
+    parser.add_argument("-W", "--width", type=int, default=DEFAULT_WIDTH, help="text width")
+    parser.add_argument("--version", action="version", version="whonews " + __version__)
+    return parser.parse_args(argv)
+
+
+def resolve_requested_character(args):
+    """ResolveRequestedCharacter Picks the named or a random Character, then Returns it with its config."""
+    character = args.character
+    if args.random:
+        chars = whosay.list_characters()
+        if not chars:
+            raise whosay.CharacterNotFound("no characters found in characters/")
+        character = random.choice(chars)
+    return character, load_character(character)
+
+
+@dataclass
+class NewsSession:
+    """NewsSession Bundles one resolved Character's voice, cache handle and look Settings."""
+    character: str
+    persona: str
+    joke_prompt: str
+    display_name: str
+    fallback: str
+    signature: str
+    region: str
+    lang: str
+    query: str
+    news_label: str
+    joke_label: str
+    anecdote_label: str
+    signature_label: str
+    model: str
+    provider: str
+    timeout: float
+    size: str
+    mode: str
+    width: int
+    db: object
+
+
+def build_news_session(character, char, args):
+    """BuildNewsSession Resolves region/lang/labels/model from the Character and Args, then Returns a Session."""
+    region = (args.region or os.environ.get("WHONEWS_REGION")
+              or NATIONALITY_REGION.get(char.get("nationality"), DEFAULT_REGION))
+    lang = (args.lang or os.environ.get("WHONEWS_LANG")
+            or LANGUAGE_CODE.get(char.get("language"), DEFAULT_LANG))
+    query = args.query
+    if not args.topic and not query:
+        query = char.get("topic")
+    news_label, joke_label, anecdote_label, signature_label = LABELS.get(
+        char.get("language"), LABELS["Spanish"])
+    model = args.model or os.environ.get("WHONEWS_MODEL") or DEFAULT_MODELS[args.provider]
+    db = None if args.no_cache else open_news_cache(args.db, args.prune)
+
+    return NewsSession(
+        character=character,
+        persona=char["persona"],
+        joke_prompt=char["joke_prompt"],
+        display_name=char.get("display_name", character),
+        fallback=char.get("fallback", "..."),
+        signature=char.get("signature"),
+        region=region,
+        lang=lang,
+        query=query,
+        news_label=news_label,
+        joke_label=joke_label,
+        anecdote_label=anecdote_label,
+        signature_label=signature_label,
+        model=model,
+        provider=args.provider,
+        timeout=args.timeout,
+        size=whosay.pick_size(args.size),
+        mode=whosay.pick_mode(args.mode),
+        width=args.width,
+        db=db,
+    )
+
+
+def run_signature_command(session):
+    """RunSignatureCommand Prints the character's Signature phrase, or Reports it has none."""
+    if not session.signature:
+        print("whonews: '{}' has no signature phrase".format(session.display_name), file=sys.stderr)
+        return 1
+    print_title(session.mode, session.signature_label.format(session.display_name))
+    print_character_panel(session.signature, session.character, session.size, session.mode, session.width)
+    return 0
+
+
+def run_anecdote_command(session, requested):
+    """RunAnecdoteCommand Tells a brief Anecdote with the requested or a random other Character."""
+    cast = resolve_anecdote_cast(requested, session.character)
+    if not cast:
+        print("whonews: no character to tell an anecdote with", file=sys.stderr)
+        return 1
+    print_title(session.mode, session.anecdote_label.format(session.display_name))
+    take = render_take_safely(
+        render_character_anecdote, session.provider,
+        session.persona, cast, session.provider, session.model, session.timeout, session.display_name)
+    if take is None:
+        return 1
+    print_character_panel(take or session.fallback, session.character, session.size, session.mode, session.width)
+    return 0
+
+
+def run_history_command(session, count):
+    """RunHistoryCommand Replays the last `count` archived Takes for this Character."""
+    rows = load_take_history(session.db, count, session.character)
+    if not rows:
+        print("whonews: nothing archived yet", file=sys.stderr)
+        return 1
+    for headline, source, take, when in rows:
+        stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(when))
+        print_dated_title(session.mode, stamp, format_headline(headline, source))
+        print_character_panel(take, session.character, session.size, session.mode, session.width)
+        print()
+    return 0
+
+
+def run_news_command(session, args):
+    """RunNewsCommand Picks a Headline, then Prints a joke/anecdote/signature/opinion about the day's News."""
+    stories = fetch_daily_stories(session, args)
+    if stories is None:
+        return run_signature_command(session) if session.signature else 1
+    if not stories:
+        print("whonews: the feed came back empty", file=sys.stderr)
+        return 1
+
+    if args.headlines:
+        return print_random_headline(session, stories)
+
+    others = [c for c in whosay.list_characters() if c != session.character]
+    if session.signature and random.random() < args.signature_chance:
+        return run_signature_command(session)
+    if others and random.random() < args.anecdote_chance:
+        return run_anecdote_command(session, None)
+    if random.random() < args.joke_chance:
+        return run_joke_command(session)
+
+    return run_opine_command(session, args, stories)
+
+
+def fetch_daily_stories(session, args):
+    """FetchDailyStories Returns today's Headlines, or None after reporting why they're unavailable."""
+    url = build_news_url(args.topic, session.query, session.region, session.lang)
+    ttl = 0 if args.refresh else args.ttl * 60
+    try:
+        return parse_headlines(fetch_feed_body(url, session.db, ttl), args.count)
+    except (urllib.error.URLError, ET.ParseError, OSError) as e:
+        if session.signature:
+            print("whonews: offline and cache is empty; falling back to signature", file=sys.stderr)
+        else:
+            print("whonews: could not read Google News: {}".format(e), file=sys.stderr)
+        return None
+
+
+def print_random_headline(session, stories):
+    """PrintRandomHeadline Prints one random Headline from stories, with its Source and today's date."""
+    print_title(session.mode, session.news_label.format(session.display_name))
+    headline, source = random.choice(stories)
+    print_dated_title(session.mode, time.strftime("%Y-%m-%d"), format_headline(headline, source))
+    return 0
+
+
+def run_joke_command(session):
+    """RunJokeCommand Tells a standalone character Joke instead of commenting on the News."""
+    print_title(session.mode, session.joke_label.format(session.display_name))
+    take = render_take_safely(
+        render_character_joke, session.provider,
+        session.persona, session.joke_prompt, session.provider, session.model, session.timeout,
+        session.display_name)
+    if take is None:
+        return 1
+    print_character_panel(take or session.fallback, session.character, session.size, session.mode, session.width)
+    return 0
+
+
+def run_opine_command(session, args, stories):
+    """RunOpineCommand Picks a Headline, reuses a cached Take or asks the model, then Prints it."""
+    headline, source = random.choice(stories)
+    print_title(session.mode, session.news_label.format(session.display_name))
+    print_dated_title(session.mode, time.strftime("%Y-%m-%d"), format_headline(headline, source))
+
+    take = None if args.refresh else load_cached_take(session.db, headline, session.model, session.character)
+    if take is None:
+        take = render_take_safely(
+            render_headline_take, session.provider,
+            session.persona, headline, session.provider, session.model, session.timeout, session.display_name)
+        if take is None:
+            return 1
+        if take:
+            store_take(session.db, headline, session.model, session.character, source, take)
+
+    print_character_panel(take or session.fallback, session.character, session.size, session.mode, session.width)
+    return 0
+
+
 # ------------------------------------------------------------------ character
 
 
@@ -167,6 +461,24 @@ def load_character(name):
         available = ", ".join(whosay.list_characters()) or "none found"
         raise whosay.CharacterNotFound(
             "unknown character '{}' (available: {})".format(name, available))
+
+
+def resolve_anecdote_cast(requested, character):
+    """ResolveAnecdoteCast Returns the display name of the requested or a random other Character."""
+    if requested:
+        try:
+            return load_character(requested).get("display_name", requested)
+        except whosay.CharacterNotFound:
+            print("whonews: unknown character '{}'".format(requested), file=sys.stderr)
+            return None
+    others = [c for c in whosay.list_characters() if c != character]
+    if not others:
+        return None
+    other = random.choice(others)
+    try:
+        return load_character(other).get("display_name", other)
+    except whosay.CharacterNotFound:
+        return other
 
 
 # ------------------------------------------------------------------ cache
@@ -209,6 +521,24 @@ def resolve_db_path():
     return os.path.join(base, "whosay", "news.db")
 
 
+def open_news_cache(path, prune_days=TAKE_KEEP_DAYS):
+    """OpenNewsCache Connects to the Sqlite file at path, preps its Schema, then Returns it (None on disk trouble)."""
+    try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        db = sqlite3.connect(path, timeout=5)
+        db.executescript(SCHEMA)
+        clear_stale_feeds(db)
+        dropped = prune_old_takes(db, prune_days)
+        db.commit()
+        report_pruned_takes(dropped, prune_days)
+        return db
+    except (sqlite3.Error, OSError) as e:
+        print("whonews: cache disabled ({})".format(e), file=sys.stderr)
+        return None
+
+
 def clear_stale_feeds(db):
     """ClearStaleFeeds Deletes cached feed Rows older than FEED_KEEP."""
     db.execute("DELETE FROM feeds WHERE fetched_at < ?", (time.time() - FEED_KEEP,))
@@ -228,24 +558,6 @@ def report_pruned_takes(dropped, prune_days):
     if dropped:
         print("whonews: pruned {} take{} older than {:g} days".format(
             dropped, "" if dropped == 1 else "s", prune_days), file=sys.stderr)
-
-
-def open_news_cache(path, prune_days=TAKE_KEEP_DAYS):
-    """OpenNewsCache Connects to the Sqlite file at path, preps its Schema, then Returns it (None on disk trouble)."""
-    try:
-        parent = os.path.dirname(path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        db = sqlite3.connect(path, timeout=5)
-        db.executescript(SCHEMA)
-        clear_stale_feeds(db)
-        dropped = prune_old_takes(db, prune_days)
-        db.commit()
-        report_pruned_takes(dropped, prune_days)
-        return db
-    except (sqlite3.Error, OSError) as e:
-        print("whonews: cache disabled ({})".format(e), file=sys.stderr)
-        return None
 
 
 def load_cached_feed(db, url, ttl):
@@ -316,14 +628,6 @@ def build_news_url(topic=None, query=None, region=DEFAULT_REGION, lang=DEFAULT_L
     return "{}?{}".format(GOOGLE_NEWS_BASE_URL, tail)
 
 
-def load_stale_feed(db, url):
-    """LoadStaleFeed Returns any cached Body for url, however old — last resort when offline."""
-    if db is None:
-        return None
-    row = db.execute("SELECT body FROM feeds WHERE url = ?", (url,)).fetchone()
-    return row[0] if row else None
-
-
 def fetch_feed_body(url, db, ttl):
     """FetchFeedBody Returns the feed's raw Xml, from cache when fresh, else over the network.
 
@@ -344,6 +648,14 @@ def fetch_feed_body(url, db, ttl):
         raise
     store_feed(db, url, body)
     return body
+
+
+def load_stale_feed(db, url):
+    """LoadStaleFeed Returns any cached Body for url, however old — last resort when offline."""
+    if db is None:
+        return None
+    row = db.execute("SELECT body FROM feeds WHERE url = ?", (url,)).fetchone()
+    return row[0] if row else None
 
 
 def parse_headlines(raw, count):
@@ -381,6 +693,78 @@ def format_headline(headline, source):
 # Each provider is a call(persona, prompt, model, timeout) -> raw text
 # function. Add a new one here (plus its default model in DEFAULT_MODELS)
 # to support another backend.
+
+
+def ask_character(persona, prompt, provider, model, timeout, display_name):
+    """AskCharacter Calls the configured Provider, then Returns its reply cleaned to one Line."""
+    answer = PROVIDERS[provider](persona, prompt, model, timeout)
+    return clean_model_reply(answer, display_name)
+
+
+def render_headline_take(persona, headline, provider, model, timeout, display_name):
+    """RenderHeadlineTake Asks the character for a one-line Opinion about the Headline."""
+    return ask_character(persona, "Titular: {}".format(headline),
+                         provider, model, timeout, display_name)
+
+
+def render_character_joke(persona, joke_prompt, provider, model, timeout, display_name):
+    """RenderCharacterJoke Asks the character for a standalone Joke instead of a news Take."""
+    return ask_character(persona, joke_prompt, provider, model, timeout, display_name)
+
+
+def render_character_anecdote(persona, other, provider, model, timeout, display_name):
+    """RenderCharacterAnecdote Asks the character for a brief Anecdote alongside the given other Character."""
+    prompt = (
+        "Inventa una anécdota breve, en tu propio estilo, en la que tú y {}\n"
+        "sean los protagonistas.\n"
+        "Make up a brief anecdote, in your own style, in which you and {}\n"
+        "are the protagonists."
+    ).format(other, other)
+    return ask_character(persona, prompt, provider, model, timeout, display_name)
+
+
+def render_take_safely(render, provider, *args):
+    """RenderTakeSafely Calls a take-Renderer, turning any model Failure into a printed whonews Message.
+
+    Returns None when the call failed (having already explained why to stderr);
+    callers that get None back should exit 1.
+    """
+    try:
+        return render(*args)
+    except RuntimeError as e:
+        print("whonews: {}".format(e), file=sys.stderr)
+    except urllib.error.URLError as e:
+        print(format_model_error(provider, e), file=sys.stderr)
+    except OSError as e:
+        print("whonews: model error: {}".format(e), file=sys.stderr)
+    return None
+
+
+def format_model_error(provider, e):
+    """FormatModelError Returns a friendly whonews Message for a network/model-call Failure."""
+    if provider == "ollama":
+        return ("whonews: no answer from Ollama at {} ({}). "
+                 "Is `ollama serve` running?".format(resolve_ollama_host(), e))
+    return "whonews: no answer from {} ({})".format(provider, e)
+
+
+GENERIC_LABEL = r"opini[oó]n|respuesta"
+
+
+def clean_model_reply(text, display_name):
+    """CleanModelReply Strips think-tags, name/label prefixes and padding, then Returns the first real Line."""
+    # Models sometimes echo the character's name, or a generic label, before
+    # the actual line ("Carmen Gloria: ...", "Opinión: ...") — strip it.
+    label = r"{}|{}".format(re.escape(display_name), GENERIC_LABEL)
+    line_re = re.compile(r"^\W*(?:{})\s*:?\W*$".format(label), re.I)
+    prefix_re = re.compile(r"^(?:{})\s*:\s*".format(label), re.I)
+
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I)
+    lines = [l.strip(" *_#").strip() for l in text.split("\n")]
+    lines = [l for l in lines if l and not line_re.match(l)]
+    text = lines[0] if lines else ""
+    text = prefix_re.sub("", text)
+    return text.strip().strip('"“”').strip()
 
 
 def resolve_ollama_host():
@@ -471,96 +855,6 @@ PROVIDERS = {
 }
 
 
-def format_model_error(provider, e):
-    """FormatModelError Returns a friendly whonews Message for a network/model-call Failure."""
-    if provider == "ollama":
-        return ("whonews: no answer from Ollama at {} ({}). "
-                 "Is `ollama serve` running?".format(resolve_ollama_host(), e))
-    return "whonews: no answer from {} ({})".format(provider, e)
-
-
-def ask_character(persona, prompt, provider, model, timeout, display_name):
-    """AskCharacter Calls the configured Provider, then Returns its reply cleaned to one Line."""
-    answer = PROVIDERS[provider](persona, prompt, model, timeout)
-    return clean_model_reply(answer, display_name)
-
-
-def render_headline_take(persona, headline, provider, model, timeout, display_name):
-    """RenderHeadlineTake Asks the character for a one-line Opinion about the Headline."""
-    return ask_character(persona, "Titular: {}".format(headline),
-                         provider, model, timeout, display_name)
-
-
-def render_character_joke(persona, joke_prompt, provider, model, timeout, display_name):
-    """RenderCharacterJoke Asks the character for a standalone Joke instead of a news Take."""
-    return ask_character(persona, joke_prompt, provider, model, timeout, display_name)
-
-
-def render_character_anecdote(persona, other, provider, model, timeout, display_name):
-    """RenderCharacterAnecdote Asks the character for a brief Anecdote alongside the given other Character."""
-    prompt = (
-        "Inventa una anécdota breve, en tu propio estilo, en la que tú y {}\n"
-        "sean los protagonistas.\n"
-        "Make up a brief anecdote, in your own style, in which you and {}\n"
-        "are the protagonists."
-    ).format(other, other)
-    return ask_character(persona, prompt, provider, model, timeout, display_name)
-
-
-def resolve_anecdote_cast(requested, character):
-    """ResolveAnecdoteCast Returns the display name of the requested or a random other Character."""
-    if requested:
-        try:
-            return load_character(requested).get("display_name", requested)
-        except whosay.CharacterNotFound:
-            print("whonews: unknown character '{}'".format(requested), file=sys.stderr)
-            return None
-    others = [c for c in whosay.list_characters() if c != character]
-    if not others:
-        return None
-    other = random.choice(others)
-    try:
-        return load_character(other).get("display_name", other)
-    except whosay.CharacterNotFound:
-        return other
-
-
-GENERIC_LABEL = r"opini[oó]n|respuesta"
-
-
-def clean_model_reply(text, display_name):
-    """CleanModelReply Strips think-tags, name/label prefixes and padding, then Returns the first real Line."""
-    # Models sometimes echo the character's name, or a generic label, before
-    # the actual line ("Carmen Gloria: ...", "Opinión: ...") — strip it.
-    label = r"{}|{}".format(re.escape(display_name), GENERIC_LABEL)
-    line_re = re.compile(r"^\W*(?:{})\s*:?\W*$".format(label), re.I)
-    prefix_re = re.compile(r"^(?:{})\s*:\s*".format(label), re.I)
-
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I)
-    lines = [l.strip(" *_#").strip() for l in text.split("\n")]
-    lines = [l for l in lines if l and not line_re.match(l)]
-    text = lines[0] if lines else ""
-    text = prefix_re.sub("", text)
-    return text.strip().strip('"“”').strip()
-
-
-def render_take_safely(render, provider, *args):
-    """RenderTakeSafely Calls a take-Renderer, turning any model Failure into a printed whonews Message.
-
-    Returns None when the call failed (having already explained why to stderr);
-    callers that get None back should exit 1.
-    """
-    try:
-        return render(*args)
-    except RuntimeError as e:
-        print("whonews: {}".format(e), file=sys.stderr)
-    except urllib.error.URLError as e:
-        print(format_model_error(provider, e), file=sys.stderr)
-    except OSError as e:
-        print("whonews: model error: {}".format(e), file=sys.stderr)
-    return None
-
-
 # ------------------------------------------------------------------ output
 
 
@@ -583,309 +877,6 @@ def print_character_panel(text, character, size, mode, width):
         print(" " * INDENT[size] + line)
     print("\n".join(whosay.render_bubble_tail(False, INDENT[size])))
     print("\n".join(whosay.load_character_art(character, size, mode)))
-
-
-# ------------------------------------------------------------------ session
-
-
-@dataclass
-class NewsSession:
-    """NewsSession Bundles one resolved Character's voice, cache handle and look Settings."""
-    character: str
-    persona: str
-    joke_prompt: str
-    display_name: str
-    fallback: str
-    signature: str
-    region: str
-    lang: str
-    query: str
-    news_label: str
-    joke_label: str
-    anecdote_label: str
-    signature_label: str
-    model: str
-    provider: str
-    timeout: float
-    size: str
-    mode: str
-    width: int
-    db: object
-
-
-def build_news_session(character, char, args):
-    """BuildNewsSession Resolves region/lang/labels/model from the Character and Args, then Returns a Session."""
-    region = (args.region or os.environ.get("WHONEWS_REGION")
-              or NATIONALITY_REGION.get(char.get("nationality"), DEFAULT_REGION))
-    lang = (args.lang or os.environ.get("WHONEWS_LANG")
-            or LANGUAGE_CODE.get(char.get("language"), DEFAULT_LANG))
-    query = args.query
-    if not args.topic and not query:
-        query = char.get("topic")
-    news_label, joke_label, anecdote_label, signature_label = LABELS.get(
-        char.get("language"), LABELS["Spanish"])
-    model = args.model or os.environ.get("WHONEWS_MODEL") or DEFAULT_MODELS[args.provider]
-    db = None if args.no_cache else open_news_cache(args.db, args.prune)
-
-    return NewsSession(
-        character=character,
-        persona=char["persona"],
-        joke_prompt=char["joke_prompt"],
-        display_name=char.get("display_name", character),
-        fallback=char.get("fallback", "..."),
-        signature=char.get("signature"),
-        region=region,
-        lang=lang,
-        query=query,
-        news_label=news_label,
-        joke_label=joke_label,
-        anecdote_label=anecdote_label,
-        signature_label=signature_label,
-        model=model,
-        provider=args.provider,
-        timeout=args.timeout,
-        size=whosay.pick_size(args.size),
-        mode=whosay.pick_mode(args.mode),
-        width=args.width,
-        db=db,
-    )
-
-
-def resolve_requested_character(args):
-    """ResolveRequestedCharacter Picks the named or a random Character, then Returns it with its config."""
-    character = args.character
-    if args.random:
-        chars = whosay.list_characters()
-        if not chars:
-            raise whosay.CharacterNotFound("no characters found in characters/")
-        character = random.choice(chars)
-    return character, load_character(character)
-
-
-# ------------------------------------------------------------------ commands
-
-
-def run_signature_command(session):
-    """RunSignatureCommand Prints the character's Signature phrase, or Reports it has none."""
-    if not session.signature:
-        print("whonews: '{}' has no signature phrase".format(session.display_name), file=sys.stderr)
-        return 1
-    print_title(session.mode, session.signature_label.format(session.display_name))
-    print_character_panel(session.signature, session.character, session.size, session.mode, session.width)
-    return 0
-
-
-def run_anecdote_command(session, requested):
-    """RunAnecdoteCommand Tells a brief Anecdote with the requested or a random other Character."""
-    cast = resolve_anecdote_cast(requested, session.character)
-    if not cast:
-        print("whonews: no character to tell an anecdote with", file=sys.stderr)
-        return 1
-    print_title(session.mode, session.anecdote_label.format(session.display_name))
-    take = render_take_safely(
-        render_character_anecdote, session.provider,
-        session.persona, cast, session.provider, session.model, session.timeout, session.display_name)
-    if take is None:
-        return 1
-    print_character_panel(take or session.fallback, session.character, session.size, session.mode, session.width)
-    return 0
-
-
-def run_history_command(session, count):
-    """RunHistoryCommand Replays the last `count` archived Takes for this Character."""
-    rows = load_take_history(session.db, count, session.character)
-    if not rows:
-        print("whonews: nothing archived yet", file=sys.stderr)
-        return 1
-    for headline, source, take, when in rows:
-        stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(when))
-        print_dated_title(session.mode, stamp, format_headline(headline, source))
-        print_character_panel(take, session.character, session.size, session.mode, session.width)
-        print()
-    return 0
-
-
-def print_random_headline(session, stories):
-    """PrintRandomHeadline Prints one random Headline from stories, with its Source and today's date."""
-    print_title(session.mode, session.news_label.format(session.display_name))
-    headline, source = random.choice(stories)
-    print_dated_title(session.mode, time.strftime("%Y-%m-%d"), format_headline(headline, source))
-    return 0
-
-
-def run_joke_command(session):
-    """RunJokeCommand Tells a standalone character Joke instead of commenting on the News."""
-    print_title(session.mode, session.joke_label.format(session.display_name))
-    take = render_take_safely(
-        render_character_joke, session.provider,
-        session.persona, session.joke_prompt, session.provider, session.model, session.timeout,
-        session.display_name)
-    if take is None:
-        return 1
-    print_character_panel(take or session.fallback, session.character, session.size, session.mode, session.width)
-    return 0
-
-
-def fetch_daily_stories(session, args):
-    """FetchDailyStories Returns today's Headlines, or None after reporting why they're unavailable."""
-    url = build_news_url(args.topic, session.query, session.region, session.lang)
-    ttl = 0 if args.refresh else args.ttl * 60
-    try:
-        return parse_headlines(fetch_feed_body(url, session.db, ttl), args.count)
-    except (urllib.error.URLError, ET.ParseError, OSError) as e:
-        if session.signature:
-            print("whonews: offline and cache is empty; falling back to signature", file=sys.stderr)
-        else:
-            print("whonews: could not read Google News: {}".format(e), file=sys.stderr)
-        return None
-
-
-def run_opine_command(session, args, stories):
-    """RunOpineCommand Picks a Headline, reuses a cached Take or asks the model, then Prints it."""
-    headline, source = random.choice(stories)
-    print_title(session.mode, session.news_label.format(session.display_name))
-    print_dated_title(session.mode, time.strftime("%Y-%m-%d"), format_headline(headline, source))
-
-    take = None if args.refresh else load_cached_take(session.db, headline, session.model, session.character)
-    if take is None:
-        take = render_take_safely(
-            render_headline_take, session.provider,
-            session.persona, headline, session.provider, session.model, session.timeout, session.display_name)
-        if take is None:
-            return 1
-        if take:
-            store_take(session.db, headline, session.model, session.character, source, take)
-
-    print_character_panel(take or session.fallback, session.character, session.size, session.mode, session.width)
-    return 0
-
-
-def run_news_command(session, args):
-    """RunNewsCommand Picks a Headline, then Prints a joke/anecdote/signature/opinion about the day's News."""
-    stories = fetch_daily_stories(session, args)
-    if stories is None:
-        return run_signature_command(session) if session.signature else 1
-    if not stories:
-        print("whonews: the feed came back empty", file=sys.stderr)
-        return 1
-
-    if args.headlines:
-        return print_random_headline(session, stories)
-
-    others = [c for c in whosay.list_characters() if c != session.character]
-    if session.signature and random.random() < args.signature_chance:
-        return run_signature_command(session)
-    if others and random.random() < args.anecdote_chance:
-        return run_anecdote_command(session, None)
-    if random.random() < args.joke_chance:
-        return run_joke_command(session)
-
-    return run_opine_command(session, args, stories)
-
-
-# ------------------------------------------------------------------ cli
-
-
-def parse_whonews_args(argv):
-    """ParseWhonewsArgs Builds the Cli parser, then Returns the parsed Args."""
-    parser = argparse.ArgumentParser(
-        prog="whonews",
-        description="The day's headlines, with a character's opinion (parody).",
-        epilog="example:\n"
-               "  whonews -C ozzy -n 3\n"
-               "  whonews --topic technology -a -b\n"
-               "  whonews --anecdote carmen_gloria\n"
-               "  whonews --history 10",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("-n", "--count", type=int, default=DEFAULT_COUNT, help="how many stories")
-    chars = whosay.list_characters()
-    parser.add_argument("-C", "--character", default=DEFAULT_CHARACTER, choices=chars or None,
-                         help="which character comments (default: {})".format(DEFAULT_CHARACTER))
-    parser.add_argument("--random", action="store_true",
-                         help="pick a random character")
-    parser.add_argument("--topic", choices=[s.lower() for s in SECTIONS] + list(SECTIONS),
-                         help="Google News section")
-    parser.add_argument("--query", help="search term instead of a section "
-                         "(default: the character's favorite topic)")
-    parser.add_argument("--region", default=None,
-                         help="country code for Google News "
-                              "(default: from the character's nationality, else {})".format(DEFAULT_REGION))
-    parser.add_argument("--lang", default=None,
-                         help="language code (default: from the character's "
-                              "language, else {})".format(DEFAULT_LANG))
-    parser.add_argument("--provider", choices=list(PROVIDERS),
-                         default=os.environ.get("WHONEWS_PROVIDER", DEFAULT_PROVIDER),
-                         help="AI backend: ollama, anthropic or openai "
-                              "(default $WHONEWS_PROVIDER or {})".format(DEFAULT_PROVIDER))
-    parser.add_argument("--model", default=None,
-                         help="model name (default: $WHONEWS_MODEL, else the "
-                              "provider's own default)")
-    parser.add_argument("--headlines", action="store_true", help="skip the model")
-    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="model timeout (s)")
-    parser.add_argument("--db", default=resolve_db_path(), help="cache location")
-    parser.add_argument("--ttl", type=float, default=DEFAULT_TTL_MIN,
-                         help="feed freshness (minutes, default {} = 1 day)".format(DEFAULT_TTL_MIN))
-    parser.add_argument("--refresh", action="store_true", help="re-fetch and re-ask")
-    parser.add_argument("--no-cache", action="store_true", help="ignore the cache entirely")
-    parser.add_argument("--history", nargs="?", type=int, const=DEFAULT_HISTORY_N, metavar="N",
-                         help="print the last N archived takes and exit")
-    parser.add_argument("--prune", type=float, default=TAKE_KEEP_DAYS, metavar="DAYS",
-                         help="drop takes older than DAYS (default {}, 0 keeps all)".format(TAKE_KEEP_DAYS))
-    parser.add_argument("--joke-chance", type=float, default=JOKE_CHANCE, metavar="P",
-                         help="chance (0-1) of a standalone joke instead of a news "
-                              "take (default {})".format(JOKE_CHANCE))
-    parser.add_argument("--anecdote-chance", type=float, default=ANECDOTE_CHANCE, metavar="P",
-                         help="chance (0-1) the character tells a brief anecdote "
-                              "with another character instead (default {})".format(ANECDOTE_CHANCE))
-    parser.add_argument("--signature-chance", type=float, default=SIGNATURE_CHANCE, metavar="P",
-                         help="chance (0-1) the character just drops its signature "
-                              "phrase instead (default {})".format(SIGNATURE_CHANCE))
-    parser.add_argument("--signature", action="store_true",
-                         help="always print the character's signature phrase and exit")
-    parser.add_argument("--anecdote", nargs="?", const="", default=None, metavar="NAME",
-                         choices=chars or None,
-                         help="always tell a brief anecdote and exit; optionally give "
-                              "which character stars in it (default: one random)")
-    size_group = parser.add_mutually_exclusive_group()
-    size_group.add_argument("-s", "--small", action="store_const", const="small", dest="size",
-                             help="20-column portrait (default)")
-    size_group.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
-                             help="40-column portrait")
-    size_group.add_argument("-b", "--big", action="store_const", const="big", dest="size",
-                             help="60-column portrait")
-    mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
-                             help="truecolor with block chars (photo-like)")
-    mode_group.add_argument("-a", "--ansi", action="store_const", const="ansi", dest="mode",
-                             help="truecolor with ASCII chars")
-    mode_group.add_argument("--no-color", action="store_const", const="mono", dest="mode",
-                             help="monochrome, classic ASCII")
-    parser.add_argument("-W", "--width", type=int, default=DEFAULT_WIDTH, help="text width")
-    parser.add_argument("--version", action="version", version="whonews " + __version__)
-    return parser.parse_args(argv)
-
-
-def main(argv=None):
-    """Main Parses the Args, Resolves the Character and Session, then Runs the matching whonews Command."""
-    args = parse_whonews_args(argv)
-
-    try:
-        character, char = resolve_requested_character(args)
-    except whosay.CharacterNotFound as e:
-        print("whonews: {}".format(e), file=sys.stderr)
-        return 1
-
-    session = build_news_session(character, char, args)
-
-    if args.signature:
-        return run_signature_command(session)
-    if args.anecdote is not None:
-        return run_anecdote_command(session, args.anecdote or None)
-    if args.history is not None:
-        return run_history_command(session, args.history)
-
-    return run_news_command(session, args)
 
 
 if __name__ == "__main__":

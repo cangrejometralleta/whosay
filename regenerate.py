@@ -54,6 +54,56 @@ IMAGE_GITIGNORE = """\
 """
 
 
+def main():
+    """Main Resolves the Args and art Target, Renders every portrait Size, and Writes the Blob."""
+    args = parse_regenerate_args()
+    resample = RESAMPLE_FILTERS[args.resample]
+    target, char_dir = resolve_art_target(args)
+    os.makedirs(char_dir, exist_ok=True)
+    ensure_gitignore(char_dir)
+
+    rgb, alpha = load_character_photo(args.imagen, None if args.no_crop else args.crop)
+    art = render_character_sizes(rgb, alpha, args, resample)
+
+    write_art_blob(art, target)
+
+
+def parse_regenerate_args():
+    """ParseRegenerateArgs Builds the Cli parser, then Returns the parsed Args."""
+    parser = argparse.ArgumentParser(
+        description="Regenerate a whosay character's art",
+        epilog="example:\n"
+               "  python3 regenerate.py photo.png --character carmen_gloria "
+               "--crop 545 60 880 560\n"
+               "  python3 regenerate.py photo.png --character ozzy --no-crop "
+               "--resample bilinear",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("imagen", help="source PNG (ideally with transparent background)")
+    parser.add_argument("--character", default="carmen_gloria",
+                         help="character folder under characters/ (default carmen_gloria)")
+    parser.add_argument("--crop", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
+                         default=[545, 60, 880, 560], help="crop region; use --no-crop to skip")
+    parser.add_argument("--no-crop", action="store_true",
+                         help="use the full image instead of --crop")
+    parser.add_argument("--big", type=int, default=60, help="columns for big portrait")
+    parser.add_argument("--medium", type=int, default=40, help="columns for medium portrait")
+    parser.add_argument("--small", type=int, default=20, help="columns for small portrait")
+    parser.add_argument("--target", default=None,
+                         help="override the blob path (default: characters/<character>/art.blob)")
+    parser.add_argument("--resample", choices=("lanczos", "bilinear", "box"), default="lanczos",
+                         help="resize filter (default lanczos; try bilinear/box if you see "
+                              "false-background holes near hard edges like hairlines)")
+    return parser.parse_args()
+
+
+def resolve_art_target(args):
+    """ResolveArtTarget Returns the Blob path and its parent character Directory."""
+    target = args.target or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "characters", args.character, "art.blob")
+    return target, os.path.dirname(target)
+
+
 def ensure_gitignore(char_dir):
     """EnsureGitignore Writes the shared image-exclusion Rules into char_dir if missing."""
     path = os.path.join(char_dir, ".gitignore")
@@ -75,6 +125,46 @@ def load_character_photo(src, crop_box=None, sharpen=True):
         rgb = rgb.filter(ImageFilter.UnsharpMask(radius=2, percent=110))
 
     return rgb, alpha
+
+
+def render_character_sizes(rgb, alpha, args, resample):
+    """RenderCharacterSizes Returns the big, medium and small portrait Art, and Reports their row Counts."""
+    cols_by_size = {"big": args.big, "medium": args.medium, "small": args.small}
+
+    art = {}
+    for name, contrast in SIZE_CONTRAST.items():
+        cols = cols_by_size[name]
+        art[name] = render_size_variants(rgb, alpha, cols, contrast, resample)
+        print("%-6s %d cols x %d rows" % (name, cols, len(art[name]["mono"])))
+    return art
+
+
+def render_size_variants(rgb, alpha, cols, contrast, resample):
+    """RenderSizeVariants Returns the mono, block and Ansi Renderings for one portrait Size."""
+    return {
+        "mono": render_ascii_art(rgb, alpha, cols, RAMP, contrast, resample=resample),
+        "block": render_ascii_art(rgb, alpha, cols, "█" * 6, 1.0, color=True, resample=resample),
+        "ansi": render_ascii_art(rgb, alpha, cols, RAMP_INV, 1.5, color=True, boost=0.42, resample=resample),
+    }
+
+
+def render_ascii_art(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
+                      color=False, amin=150, white=246, boost=1.0, resample=Image.LANCZOS):
+    """RenderAsciiArt Resizes the Photo to a character Grid, then Returns its ramp-mapped ascii Lines.
+
+    resample defaults to Lanczos, which is sharpest but can ring near
+    hard edges (e.g. hair against skin) and overshoot past the white
+    cutoff, punching false background-colored holes in the subject. Pass
+    Bilinear/Box for photos where that shows up.
+    """
+    amask, lum, px = resize_photo_grid(rgb, alpha, cols, contrast, gamma, boost, resample)
+
+    n = len(ramp) - 1
+    lines = [
+        render_ascii_row(px[y], amask[y], lum[y], ramp, n, color, amin, white)
+        for y in range(px.shape[0])
+    ]
+    return trim_blank_edges(lines)
 
 
 def resize_photo_grid(rgb, alpha, cols, contrast, gamma, boost, resample):
@@ -131,46 +221,6 @@ def trim_blank_edges(lines):
     return lines
 
 
-def render_ascii_art(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
-                      color=False, amin=150, white=246, boost=1.0, resample=Image.LANCZOS):
-    """RenderAsciiArt Resizes the Photo to a character Grid, then Returns its ramp-mapped ascii Lines.
-
-    resample defaults to Lanczos, which is sharpest but can ring near
-    hard edges (e.g. hair against skin) and overshoot past the white
-    cutoff, punching false background-colored holes in the subject. Pass
-    Bilinear/Box for photos where that shows up.
-    """
-    amask, lum, px = resize_photo_grid(rgb, alpha, cols, contrast, gamma, boost, resample)
-
-    n = len(ramp) - 1
-    lines = [
-        render_ascii_row(px[y], amask[y], lum[y], ramp, n, color, amin, white)
-        for y in range(px.shape[0])
-    ]
-    return trim_blank_edges(lines)
-
-
-def render_size_variants(rgb, alpha, cols, contrast, resample):
-    """RenderSizeVariants Returns the mono, block and Ansi Renderings for one portrait Size."""
-    return {
-        "mono": render_ascii_art(rgb, alpha, cols, RAMP, contrast, resample=resample),
-        "block": render_ascii_art(rgb, alpha, cols, "█" * 6, 1.0, color=True, resample=resample),
-        "ansi": render_ascii_art(rgb, alpha, cols, RAMP_INV, 1.5, color=True, boost=0.42, resample=resample),
-    }
-
-
-def render_character_sizes(rgb, alpha, args, resample):
-    """RenderCharacterSizes Returns the big, medium and small portrait Art, and Reports their row Counts."""
-    cols_by_size = {"big": args.big, "medium": args.medium, "small": args.small}
-
-    art = {}
-    for name, contrast in SIZE_CONTRAST.items():
-        cols = cols_by_size[name]
-        art[name] = render_size_variants(rgb, alpha, cols, contrast, resample)
-        print("%-6s %d cols x %d rows" % (name, cols, len(art[name]["mono"])))
-    return art
-
-
 def write_art_blob(art, target):
     """WriteArtBlob Compresses the Art dict into base64, then Writes it to the target Path."""
     payload = json.dumps(art, separators=(",", ":")).encode()
@@ -178,56 +228,6 @@ def write_art_blob(art, target):
 
     open(target, "w", encoding="ascii").write(blob)
     print("art updated in", target)
-
-
-def resolve_art_target(args):
-    """ResolveArtTarget Returns the Blob path and its parent character Directory."""
-    target = args.target or os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "characters", args.character, "art.blob")
-    return target, os.path.dirname(target)
-
-
-def parse_regenerate_args():
-    """ParseRegenerateArgs Builds the Cli parser, then Returns the parsed Args."""
-    parser = argparse.ArgumentParser(
-        description="Regenerate a whosay character's art",
-        epilog="example:\n"
-               "  python3 regenerate.py photo.png --character carmen_gloria "
-               "--crop 545 60 880 560\n"
-               "  python3 regenerate.py photo.png --character ozzy --no-crop "
-               "--resample bilinear",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("imagen", help="source PNG (ideally with transparent background)")
-    parser.add_argument("--character", default="carmen_gloria",
-                         help="character folder under characters/ (default carmen_gloria)")
-    parser.add_argument("--crop", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
-                         default=[545, 60, 880, 560], help="crop region; use --no-crop to skip")
-    parser.add_argument("--no-crop", action="store_true",
-                         help="use the full image instead of --crop")
-    parser.add_argument("--big", type=int, default=60, help="columns for big portrait")
-    parser.add_argument("--medium", type=int, default=40, help="columns for medium portrait")
-    parser.add_argument("--small", type=int, default=20, help="columns for small portrait")
-    parser.add_argument("--target", default=None,
-                         help="override the blob path (default: characters/<character>/art.blob)")
-    parser.add_argument("--resample", choices=("lanczos", "bilinear", "box"), default="lanczos",
-                         help="resize filter (default lanczos; try bilinear/box if you see "
-                              "false-background holes near hard edges like hairlines)")
-    return parser.parse_args()
-
-
-def main():
-    """Main Resolves the Args and art Target, Renders every portrait Size, and Writes the Blob."""
-    args = parse_regenerate_args()
-    resample = RESAMPLE_FILTERS[args.resample]
-    target, char_dir = resolve_art_target(args)
-    os.makedirs(char_dir, exist_ok=True)
-    ensure_gitignore(char_dir)
-
-    rgb, alpha = load_character_photo(args.imagen, None if args.no_crop else args.crop)
-    art = render_character_sizes(rgb, alpha, args, resample)
-
-    write_art_blob(art, target)
 
 
 if __name__ == "__main__":
