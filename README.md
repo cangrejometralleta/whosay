@@ -103,8 +103,9 @@ whosay -m "Good morning, $USER"
 ## The news anchor: `whonews.py`
 
 Pulls the day's top stories from Google News RSS and, 70% of the time by
-default, asks a local model through [Ollama](https://ollama.com) for a
-one-line take — in a character's voice — about one of them picked at random.
+default, asks a local model through a [llama.cpp](https://github.com/ggml-org/llama.cpp)
+server for a one-line take — in a character's voice — about one of them
+picked at random.
 10% of the time it skips the news and the character just cracks a sarcastic
 joke; 10% the character invents a brief anecdote in its own style, starring
 itself alongside up to two other random characters; and the remaining 10%, it
@@ -113,8 +114,8 @@ just drops its signature phrase. `--joke-chance`, `--anecdote-chance` and
 `whosay`. Stdlib only — no extra dependencies.
 
 ```bash
-ollama serve &            # if it isn't already running
-python3 whonews.py        # one random take, Chile
+llama-server -m model.gguf --port 8080 &   # if it isn't already running
+python3 whonews.py                          # one random take, Chile
 ```
 
 ```
@@ -219,21 +220,17 @@ A character's `nationality`, `language` and `topic` fields (see
 search query — `--region`, `--lang` and `--query` override them per run.
 
 Defaults can come from the environment: `WHONEWS_PROVIDER`, `WHONEWS_MODEL`,
-`WHONEWS_REGION`, `WHONEWS_LANG`, `WHONEWS_DB`, plus `OLLAMA_HOST` if your
-daemon isn't on `127.0.0.1:11434`.
+`WHONEWS_REGION`, `WHONEWS_LANG`, `WHONEWS_DB`, plus `LLAMA_HOST` if your
+`llama-server` isn't on `127.0.0.1:8080`.
 
 ```bash
-WHONEWS_MODEL=gemma3:4b python3 whonews.py -n 3 --topic technology
+WHONEWS_MODEL=gemma-3-4b python3 whonews.py -n 3 --topic technology
 python3 whonews.py --query "arte contemporáneo" --region AR --lang es-419
 python3 whonews.py -C some_other_character
 python3 whonews.py --joke-chance 0.5   # jokes half the time instead of 10%
 python3 whonews.py --provider anthropic
 python3 whonews.py --provider openai --model gpt-4o
 ```
-
-Reasoning-capable Ollama models are asked with `think: false` — otherwise
-they spend the whole token budget thinking and hand back an empty answer.
-This only applies to the `ollama` provider.
 
 ### Providers
 
@@ -242,14 +239,17 @@ This only applies to the `ollama` provider.
 
 | Provider | Default model | Credential |
 |---|---|---|
-| `ollama` (default) | `llama3.2:1b` — small and fast, see [Picking a model](#picking-a-model) | none — talks to a local `ollama serve`, `$OLLAMA_HOST` if not on `127.0.0.1:11434` |
+| `ollama` (default) | `coder-3b` — see [Picking a model](#picking-a-model) | none — talks to a local `llama-server`, `$LLAMA_HOST` if not on `127.0.0.1:8080` |
 | `anthropic` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` env var |
 | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` env var |
 
-`--model` overrides the provider's default (as does `$WHONEWS_MODEL`, applied
-regardless of provider — unset it if you switch providers and it's still
-pointing at an Ollama model name). Anthropic and OpenAI cost real money per
-call and need network access; Ollama is free and local, which is why it
+The default provider is still called `ollama` (so existing `--provider`/
+`$WHONEWS_PROVIDER` usage doesn't break), but it now talks to a local
+`llama-server` instance over its OpenAI-compatible API instead of the Ollama
+daemon. `--model` overrides the provider's default (as does `$WHONEWS_MODEL`,
+applied regardless of provider — unset it if you switch providers and it's
+still set to something local-specific). Anthropic and OpenAI cost real money
+per call and need network access; the local server is free, which is why it
 stays the default. Missing or wrong credentials fail with a one-line error
 on stderr — no traceback, no accidental retry loop.
 
@@ -283,22 +283,37 @@ keeps working without it.
 
 ### Picking a model
 
-The default is `llama3.2:1b`, picked over larger models for speed and memory:
-this is a terminal toy, and it has to answer at terminal speed while staying
-light on VRAM and RAM. It's not the wittiest model in the world, but it's
-instant and runs comfortably on a modest GPU (or even without a strong one).
-If you want sharper takes and don't mind the wait, point `$WHONEWS_MODEL` at a
-bigger model — the cache key is `(headline, model, character)`, so switching
-doesn't throw away what you already generated:
+`whonews.py` doesn't pick or download a model itself — it just sends the
+`model` field of the request to your `llama-server`. What that field needs
+to be depends on how the server is set up:
 
-```bash
-WHONEWS_MODEL=gemma3:4b python3 whonews.py   # sharper takes, slower
-WHONEWS_MODEL=gemma4:latest python3 whonews.py   # when you're not in a hurry
-```
+- **Single-model instance** (the common case): the field is effectively
+  ignored — whichever `.gguf` you started the server with is all it can
+  serve. Pick something small for terminal-speed answers, light on VRAM and
+  RAM, and restart the server with a bigger `.gguf` for sharper takes:
 
-`gemma4` writes the sharper line, but it's a reasoning model: an order of
-magnitude slower, and unpredictable — you can't tell whether a headline will
-take 12 seconds or 45.
+  ```bash
+  llama-server -m llama-3.2-1b-instruct.Q4_K_M.gguf --port 8080 &
+  python3 whonews.py                            # fast, terminal-speed
+
+  # stop that server, start a bigger one, and tag the cache key to match
+  llama-server -m gemma-3-4b-it.Q4_K_M.gguf --port 8080 &
+  WHONEWS_MODEL=gemma-3-4b python3 whonews.py   # sharper takes, slower
+  ```
+
+- **Multi-model router** (e.g. a [llama-swap](https://github.com/mostlygeek/llama-swap)-style
+  setup serving several aliases): the field must be a real alias the server
+  knows about, or the request fails with a plain "model not found" error.
+  The default (`coder-3b`) matches this repo's own dev setup — change it to
+  whatever alias you actually have loaded:
+
+  ```bash
+  WHONEWS_MODEL=my-alias python3 whonews.py
+  ```
+
+Either way, the cache key is `(headline, model, character)`, so switching
+models — on purpose, or because `$WHONEWS_MODEL` changed — doesn't throw
+away what you already generated under each name.
 
 The opinions are generated by a language model as a parody. They are not quotes
 from, or endorsed by, any real person.
