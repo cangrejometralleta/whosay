@@ -55,7 +55,9 @@ class CharacterNotFound(Exception):
 
 
 def main(argv=None):
-    """Main Parses the Args, Resolves the Character and Portrait, then Prints the whosay Panel."""
+    """Main Parses the Args,
+       Resolves the Character and Portrait,
+       then Prints the whosay Panel."""
     args = parse_whosay_args(argv)
 
     if args.list_characters:
@@ -78,7 +80,8 @@ def main(argv=None):
 
 
 def parse_whosay_args(argv):
-    """ParseWhosayArgs Builds the Cli parser, then Returns the parsed Args."""
+    """ParseWhosayArgs Builds the Cli parser,
+       then Returns the parsed Args."""
     parser = argparse.ArgumentParser(
         prog="whosay",
         description="Like cowsay, but with a cast of characters.",
@@ -118,7 +121,8 @@ def parse_whosay_args(argv):
 
 
 def print_character_roster():
-    """PrintCharacterRoster Lists every known Character, or Reports there are none."""
+    """PrintCharacterRoster Lists every known Character,
+       or Reports there are none."""
     chars = list_characters()
     if not chars:
         print("whosay: no characters found in characters/", file=sys.stderr)
@@ -128,7 +132,8 @@ def print_character_roster():
 
 
 def resolve_character_choice(args):
-    """ResolveCharacterChoice Returns the requested Character, or a random one when args.random is set."""
+    """ResolveCharacterChoice Returns the requested Character,
+       or a random one when args.random is set."""
     if not args.random:
         return args.character
     chars = list_characters()
@@ -140,7 +145,8 @@ def resolve_character_choice(args):
 
 
 def pick_size(flag):
-    """PickSize Returns flag if given, else the default portrait Size."""
+    """PickSize Returns flag if given,
+       else the default portrait Size."""
     return flag or DEFAULT_SIZE
 
 
@@ -148,7 +154,8 @@ _art_cache = {}
 
 
 def load_character_art(character, size, mode):
-    """LoadCharacterArt Returns the cached ascii Frame for this character/size/mode, decoding the Blob once.
+    """LoadCharacterArt Returns the cached ascii Frame for this character/size/mode,
+       decoding the Blob once.
 
     mode: 'mono' | 'block' | 'ansi'
     """
@@ -166,7 +173,8 @@ def load_character_art(character, size, mode):
 
 
 def pick_mode(flag):
-    """PickMode Returns flag if given, else auto-detects mono/block from the terminal Environment."""
+    """PickMode Returns flag if given,
+       else auto-detects mono/block from the terminal Environment."""
     if flag:
         return flag
     if os.environ.get("NO_COLOR") or not sys.stdout.isatty():
@@ -218,7 +226,8 @@ def _resolve_characters_dir():
 
 
 def render_speech_bubble(text, width=DEFAULT_WIDTH, think=False):
-    """RenderSpeechBubble Wraps text to width, then Returns the cowsay-style Lines of a speech/thought bubble."""
+    """RenderSpeechBubble Wraps text to width,
+       then Returns the cowsay-style Lines of a speech/thought bubble."""
     paras = text.expandtabs().split("\n")
     lines = []
     for p in paras:

@@ -157,7 +157,9 @@ LABELS = {
 
 
 def main(argv=None):
-    """Main Parses the Args, Resolves the Character and Session, then Runs the matching whonews Command."""
+    """Main Parses the Args,
+       Resolves the Character and Session,
+       then Runs the matching whonews Command."""
     args = parse_whonews_args(argv)
 
     try:
@@ -179,7 +181,8 @@ def main(argv=None):
 
 
 def parse_whonews_args(argv):
-    """ParseWhonewsArgs Builds the Cli parser, then Returns the parsed Args."""
+    """ParseWhonewsArgs Builds the Cli parser,
+       then Returns the parsed Args."""
     parser = argparse.ArgumentParser(
         prog="whonews",
         description="The day's headlines, with a character's opinion (parody).",
@@ -259,7 +262,8 @@ def parse_whonews_args(argv):
 
 
 def resolve_requested_character(args):
-    """ResolveRequestedCharacter Picks the named or a random Character, then Returns it with its config."""
+    """ResolveRequestedCharacter Picks the named or a random Character,
+       then Returns it with its config."""
     character = args.character
     if args.random:
         chars = whosay.list_characters()
@@ -295,7 +299,8 @@ class NewsSession:
 
 
 def build_news_session(character, char, args):
-    """BuildNewsSession Resolves region/lang/labels/model from the Character and Args, then Returns a Session."""
+    """BuildNewsSession Resolves region/lang/labels/model from the Character and Args,
+       then Returns a Session."""
     region = (args.region or os.environ.get("WHONEWS_REGION")
               or NATIONALITY_REGION.get(char.get("nationality"), DEFAULT_REGION))
     lang = (args.lang or os.environ.get("WHONEWS_LANG")
@@ -333,7 +338,8 @@ def build_news_session(character, char, args):
 
 
 def run_signature_command(session):
-    """RunSignatureCommand Prints the character's Signature phrase, or Reports it has none."""
+    """RunSignatureCommand Prints the character's Signature phrase,
+       or Reports it has none."""
     if not session.signature:
         print("whonews: '{}' has no signature phrase".format(session.display_name), file=sys.stderr)
         return 1
@@ -373,7 +379,8 @@ def run_history_command(session, count):
 
 
 def run_news_command(session, args):
-    """RunNewsCommand Picks a Headline, then Prints a joke/anecdote/signature/opinion about the day's News."""
+    """RunNewsCommand Picks a Headline,
+       then Prints a joke/anecdote/signature/opinion about the day's News."""
     stories = fetch_daily_stories(session, args)
     if stories is None:
         return run_signature_command(session) if session.signature else 1
@@ -396,7 +403,8 @@ def run_news_command(session, args):
 
 
 def fetch_daily_stories(session, args):
-    """FetchDailyStories Returns today's Headlines, or None after reporting why they're unavailable."""
+    """FetchDailyStories Returns today's Headlines,
+       or None after reporting why they're unavailable."""
     url = build_news_url(args.topic, session.query, session.region, session.lang)
     ttl = 0 if args.refresh else args.ttl * 60
     try:
@@ -431,7 +439,9 @@ def run_joke_command(session):
 
 
 def run_opine_command(session, args, stories):
-    """RunOpineCommand Picks a Headline, reuses a cached Take or asks the model, then Prints it."""
+    """RunOpineCommand Picks a Headline,
+       reuses a cached Take or asks the model,
+       then Prints it."""
     headline, source = random.choice(stories)
     print_title(session.mode, session.news_label.format(session.display_name))
     print_dated_title(session.mode, time.strftime("%Y-%m-%d"), format_headline(headline, source))
@@ -454,7 +464,8 @@ def run_opine_command(session, args, stories):
 
 
 def load_character(name):
-    """LoadCharacter Reads characters/<name>/character.json, then Returns it as a dict."""
+    """LoadCharacter Reads characters/<name>/character.json,
+       then Returns it as a dict."""
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                          "characters", name, "character.json")
     try:
@@ -525,7 +536,9 @@ def resolve_db_path():
 
 
 def open_news_cache(path, prune_days=TAKE_KEEP_DAYS):
-    """OpenNewsCache Connects to the Sqlite file at path, preps its Schema, then Returns it (None on disk trouble)."""
+    """OpenNewsCache Connects to the Sqlite file at path,
+       preps its Schema,
+       then Returns it (None on disk trouble)."""
     try:
         parent = os.path.dirname(path)
         if parent:
@@ -548,7 +561,8 @@ def clear_stale_feeds(db):
 
 
 def prune_old_takes(db, days):
-    """PruneOldTakes Deletes archived Takes older than `days`, then Returns how many were dropped."""
+    """PruneOldTakes Deletes archived Takes older than `days`,
+       then Returns how many were dropped."""
     if db is None or days <= 0:
         return 0
     cur = db.execute("DELETE FROM takes WHERE created_at < ?",
@@ -564,7 +578,8 @@ def report_pruned_takes(dropped, prune_days):
 
 
 def load_cached_feed(db, url, ttl):
-    """LoadCachedFeed Returns the cached feed Body for url if still within ttl, else None."""
+    """LoadCachedFeed Returns the cached feed Body for url if still within ttl,
+       else None."""
     if db is None or ttl <= 0:
         return None
     row = db.execute(
@@ -584,7 +599,8 @@ def store_feed(db, url, body):
 
 
 def load_cached_take(db, headline, model, character):
-    """LoadCachedTake Returns a previously stored Take for this headline/model/character, or None."""
+    """LoadCachedTake Returns a previously stored Take for this headline/model/character,
+       or None."""
     if db is None:
         return None
     row = db.execute(
@@ -632,7 +648,8 @@ def build_news_url(topic=None, query=None, region=DEFAULT_REGION, lang=DEFAULT_L
 
 
 def fetch_feed_body(url, db, ttl):
-    """FetchFeedBody Returns the feed's raw Xml, from cache when fresh, else over the network.
+    """FetchFeedBody Returns the feed's raw Xml, from cache when fresh,
+       else over the network.
 
     If the network fetch fails, falls back to a stale cached copy (up to
     FEED_KEEP old) rather than giving up outright.
@@ -699,7 +716,8 @@ def format_headline(headline, source):
 
 
 def ask_character(persona, prompt, provider, model, timeout, display_name):
-    """AskCharacter Calls the configured Provider, then Returns its reply cleaned to one Line."""
+    """AskCharacter Calls the configured Provider,
+       then Returns its reply cleaned to one Line."""
     answer = PROVIDERS[provider](persona, prompt, model, timeout)
     return clean_model_reply(answer, display_name)
 
@@ -727,7 +745,8 @@ def render_character_anecdote(persona, other, provider, model, timeout, display_
 
 
 def render_take_safely(render, provider, *args):
-    """RenderTakeSafely Calls a take-Renderer, turning any model Failure into a printed whonews Message.
+    """RenderTakeSafely Calls a take-Renderer,
+       turning any model Failure into a printed whonews Message.
 
     Returns None when the call failed (having already explained why to stderr);
     callers that get None back should exit 1.
@@ -755,7 +774,8 @@ GENERIC_LABEL = r"opini[oó]n|respuesta"
 
 
 def clean_model_reply(text, display_name):
-    """CleanModelReply Strips think-tags, name/label prefixes and padding, then Returns the first real Line."""
+    """CleanModelReply Strips think-tags, name/label prefixes and padding,
+       then Returns the first real Line."""
     # Models sometimes echo the character's name, or a generic label, before
     # the actual line ("Carmen Gloria: ...", "Opinión: ...") — strip it.
     label = r"{}|{}".format(re.escape(display_name), GENERIC_LABEL)
@@ -779,7 +799,8 @@ def resolve_ollama_host():
 
 
 def _post_json(url, body, timeout, headers=None):
-    """PostJson Sends body as Json to url, then Returns the decoded Json response."""
+    """PostJson Sends body as Json to url,
+       then Returns the decoded Json response."""
     req = urllib.request.Request(
         url, data=json.dumps(body).encode(),
         headers=dict(headers or {}, **{"Content-Type": "application/json"}),
@@ -861,12 +882,14 @@ PROVIDERS = {
 
 
 def print_title(mode, text):
-    """PrintTitle Prints a bold Title, or plain text when mode is mono."""
+    """PrintTitle Prints a bold Title,
+       or plain text when mode is mono."""
     print("\033[1m{}\033[0m".format(text) if mode != "mono" else text)
 
 
 def print_dated_title(mode, stamp, text):
-    """PrintDatedTitle Prints a colored date Stamp beside a bold Title, or plain text when mode is mono."""
+    """PrintDatedTitle Prints a colored date Stamp beside a bold Title,
+       or plain text when mode is mono."""
     if mode != "mono":
         print("\033[36m{}\033[0m  \033[1m{}\033[0m".format(stamp, text))
     else:

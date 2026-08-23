@@ -55,7 +55,9 @@ IMAGE_GITIGNORE = """\
 
 
 def main():
-    """Main Resolves the Args and art Target, Renders every portrait Size, and Writes the Blob."""
+    """Main Resolves the Args and art Target,
+       Renders every portrait Size,
+       and Writes the Blob."""
     args = parse_regenerate_args()
     resample = RESAMPLE_FILTERS[args.resample]
     target, char_dir = resolve_art_target(args)
@@ -69,7 +71,8 @@ def main():
 
 
 def parse_regenerate_args():
-    """ParseRegenerateArgs Builds the Cli parser, then Returns the parsed Args."""
+    """ParseRegenerateArgs Builds the Cli parser,
+       then Returns the parsed Args."""
     parser = argparse.ArgumentParser(
         description="Regenerate a whosay character's art",
         epilog="example:\n"
@@ -112,7 +115,9 @@ def ensure_gitignore(char_dir):
 
 
 def load_character_photo(src, crop_box=None, sharpen=True):
-    """LoadCharacterPhoto Reads the source Image, composites transparency on White, and Returns (rgb, alpha)."""
+    """LoadCharacterPhoto Reads the source Image,
+       composites transparency on White,
+       and Returns (rgb, alpha)."""
     image = Image.open(src).convert("RGBA")
     if crop_box:
         image = image.crop(tuple(crop_box))
@@ -128,7 +133,8 @@ def load_character_photo(src, crop_box=None, sharpen=True):
 
 
 def render_character_sizes(rgb, alpha, args, resample):
-    """RenderCharacterSizes Returns the big, medium and small portrait Art, and Reports their row Counts."""
+    """RenderCharacterSizes Returns the big, medium and small portrait Art,
+       and Reports their row Counts."""
     cols_by_size = {"big": args.big, "medium": args.medium, "small": args.small}
 
     art = {}
@@ -150,7 +156,8 @@ def render_size_variants(rgb, alpha, cols, contrast, resample):
 
 def render_ascii_art(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
                       color=False, amin=150, white=246, boost=1.0, resample=Image.LANCZOS):
-    """RenderAsciiArt Resizes the Photo to a character Grid, then Returns its ramp-mapped ascii Lines.
+    """RenderAsciiArt Resizes the Photo to a character Grid,
+       then Returns its ramp-mapped ascii Lines.
 
     resample defaults to Lanczos, which is sharpest but can ring near
     hard edges (e.g. hair against skin) and overshoot past the white
@@ -168,7 +175,8 @@ def render_ascii_art(rgb, alpha, cols, ramp=RAMP, contrast=1.65, gamma=1.0,
 
 
 def resize_photo_grid(rgb, alpha, cols, contrast, gamma, boost, resample):
-    """ResizePhotoGrid Shrinks the Photo to `cols` wide, then Returns its alpha, luminance and pixel Grids."""
+    """ResizePhotoGrid Shrinks the Photo to `cols` wide,
+       then Returns its alpha, luminance and pixel Grids."""
     width, height = rgb.size
     rows = max(1, int(round(cols * (height / width) * CHAR_AR)))
     small = rgb.resize((cols, rows), resample)
@@ -187,7 +195,8 @@ def resize_photo_grid(rgb, alpha, cols, contrast, gamma, boost, resample):
 
 
 def render_ascii_row(row_px, row_amask, row_lum, ramp, n, color, amin, white):
-    """RenderAsciiRow Maps one pixel Row to ramp Characters, adding Ansi color codes when asked."""
+    """RenderAsciiRow Maps one pixel Row to ramp Characters,
+       adding Ansi color codes when asked."""
     row, prev = [], None
     for x in range(len(row_px)):
         r, g, b = row_px[x]
@@ -222,7 +231,8 @@ def trim_blank_edges(lines):
 
 
 def write_art_blob(art, target):
-    """WriteArtBlob Compresses the Art dict into base64, then Writes it to the target Path."""
+    """WriteArtBlob Compresses the Art dict into base64,
+       then Writes it to the target Path."""
     payload = json.dumps(art, separators=(",", ":")).encode()
     blob = base64.b64encode(zlib.compress(payload, 9)).decode()
 
