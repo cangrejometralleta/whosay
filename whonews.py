@@ -246,28 +246,8 @@ def parse_whonews_args(argv):
     parser.add_argument("--lang", default=None,
                          help="language code (default: from the character's "
                               "language, else {})".format(DEFAULT_LANG))
-    parser.add_argument("--provider", choices=list(PROVIDERS), default=None,
-                         help="AI backend: ollama, anthropic or openai "
-                              "(default $WHONEWS_PROVIDER, else {}: the local "
-                              "llama-server)".format(DEFAULT_PROVIDER))
-    parser.add_argument("--anthropic-key", default=None, metavar="KEY",
-                         help="anthropic credential (default $ANTHROPIC_API_KEY)")
-    parser.add_argument("--anthropic-url", default=None, metavar="URL",
-                         help="anthropic base url (default $ANTHROPIC_BASE_URL, else {})".format(
-                             PROVIDER_PORTS["anthropic"].default_url))
-    parser.add_argument("--openai-key", default=None, metavar="KEY",
-                         help="openai credential (default $OPENAI_API_KEY)")
-    parser.add_argument("--openai-url", default=None, metavar="URL",
-                         help="openai base url (default $OPENAI_BASE_URL, else {})".format(
-                             PROVIDER_PORTS["openai"].default_url))
-    parser.add_argument("--ollama-url", default=None, metavar="URL",
-                         help="local llama-server base url (default $LLAMA_HOST, else {})".format(
-                             PROVIDER_PORTS["ollama"].default_url))
-    parser.add_argument("--model", default=None,
-                         help="model name (default: $WHONEWS_MODEL, else the "
-                              "provider's own default)")
+    add_model_arguments(parser)
     parser.add_argument("--headlines", action="store_true", help="skip the model")
-    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="model timeout (s)")
     parser.add_argument("--db", default=resolve_db_path(), help="cache location")
     parser.add_argument("--ttl", type=float, default=DEFAULT_TTL_MIN,
                          help="feed freshness (minutes, default {} = 1 day)".format(DEFAULT_TTL_MIN))
@@ -756,6 +736,33 @@ def format_headline(headline, source):
 # in DEFAULT_MODELS) to support another backend.
 
 
+def add_model_arguments(parser):
+    """AddModelArguments Adds the backend, Credential, Endpoint and Model flags,
+       shared by every script that asks a character something."""
+    parser.add_argument("--provider", choices=list(PROVIDERS), default=None,
+                         help="AI backend: ollama, anthropic or openai "
+                              "(default $WHONEWS_PROVIDER, else {}: the local "
+                              "llama-server)".format(DEFAULT_PROVIDER))
+    parser.add_argument("--anthropic-key", default=None, metavar="KEY",
+                         help="anthropic credential (default $ANTHROPIC_API_KEY)")
+    parser.add_argument("--anthropic-url", default=None, metavar="URL",
+                         help="anthropic base url (default $ANTHROPIC_BASE_URL, else {})".format(
+                             PROVIDER_PORTS["anthropic"].default_url))
+    parser.add_argument("--openai-key", default=None, metavar="KEY",
+                         help="openai credential (default $OPENAI_API_KEY)")
+    parser.add_argument("--openai-url", default=None, metavar="URL",
+                         help="openai base url (default $OPENAI_BASE_URL, else {})".format(
+                             PROVIDER_PORTS["openai"].default_url))
+    parser.add_argument("--ollama-url", default=None, metavar="URL",
+                         help="local llama-server base url (default $LLAMA_HOST, else {})".format(
+                             PROVIDER_PORTS["ollama"].default_url))
+    parser.add_argument("--model", default=None,
+                         help="model name (default: $WHONEWS_MODEL, else the "
+                              "provider's own default)")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT,
+                         help="model timeout (s)")
+
+
 @dataclass(frozen=True)
 class ModelBackend:
     """ModelBackend Bundles which Api answers a Take, with the Credential and Endpoint it needs."""
@@ -794,9 +801,9 @@ def render_character_anecdote(persona, other, backend, display_name):
     return ask_character(persona, prompt, backend, display_name)
 
 
-def render_take_safely(render, backend, *args):
+def render_take_safely(render, backend, *args, prog="whonews"):
     """RenderTakeSafely Calls a take-Renderer,
-       turning any model Failure into a printed whonews Message.
+       turning any model Failure into a Message printed in the calling script's own name.
 
     Returns None when the call failed (having already explained why to stderr);
     callers that get None back should exit 1.
@@ -804,22 +811,23 @@ def render_take_safely(render, backend, *args):
     try:
         return render(*args)
     except RuntimeError as e:
-        print("whonews: {}".format(e), file=sys.stderr)
+        print("{}: {}".format(prog, e), file=sys.stderr)
     except urllib.error.URLError as e:
-        print(format_model_error(backend, e), file=sys.stderr)
+        print(format_model_error(backend, e, prog), file=sys.stderr)
     except OSError as e:
-        print("whonews: model error: {}".format(e), file=sys.stderr)
+        print("{}: model error: {}".format(prog, e), file=sys.stderr)
     return None
 
 
-def format_model_error(backend, e):
-    """FormatModelError Returns a friendly whonews Message for a network/model-call Failure."""
+def format_model_error(backend, e, prog="whonews"):
+    """FormatModelError Returns a friendly Message for a network/model-call Failure,
+       in the calling script's own name."""
     reason = read_api_reason(e) or e
     if backend.provider == "ollama":
-        return ("whonews: no answer from the local model at {} ({}). "
-                 "Is `llama-server` running?".format(backend.base_url, reason))
-    return "whonews: no answer from {} at {} ({})".format(
-        backend.provider, backend.base_url, reason)
+        return ("{}: no answer from the local model at {} ({}). "
+                 "Is `llama-server` running?".format(prog, backend.base_url, reason))
+    return "{}: no answer from {} at {} ({})".format(
+        prog, backend.provider, backend.base_url, reason)
 
 
 def read_api_reason(e):
