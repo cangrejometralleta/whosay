@@ -27,7 +27,7 @@ import zlib
 __version__ = "1.0"
 
 # ------------------------------------------------------------------ defaults
-DEFAULT_SIZE = "small"   # 20 columns
+DEFAULT_SIZE = "small"   # the narrowest of the three portraits in the blob
 DEFAULT_WIDTH = 40       # text width inside the bubble
 INDENT = {"small": 1, "medium": 2, "big": 4}  # how far the bubble sits from the left
 
@@ -204,11 +204,11 @@ def add_look_arguments(parser, mono_flags=("-n", "--no-color")):
     """AddLookArguments Adds the portrait size, the color Mode and the text Width both scripts share."""
     size_group = parser.add_mutually_exclusive_group()
     size_group.add_argument("-s", "--small", action="store_const", const="small", dest="size",
-                            help="20-column portrait (default)")
+                            help="small portrait, about 20 columns (default)")
     size_group.add_argument("-m", "--medium", action="store_const", const="medium", dest="size",
-                            help="40-column portrait")
+                            help="medium portrait, about 40 columns")
     size_group.add_argument("-b", "--big", action="store_const", const="big", dest="size",
-                            help="60-column portrait")
+                            help="big portrait, about 60 columns")
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("-c", "--color", action="store_const", const="block", dest="mode",
                             help="truecolor with block chars (photo-like)")

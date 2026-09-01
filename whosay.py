@@ -16,18 +16,23 @@ Options:
     -C, --character NAME  which character to draw (default: a random one)
     --list-characters      list the available characters and exit
     --random               pick a random character (the default)
-    -s/--small    small portrait (20 col, default)
-    -m/--medium   medium portrait (40 col)
-    -b/--big      big portrait (60 col)
+    -s/--small    small portrait (about 20 col, default)
+    -m/--medium   medium portrait (about 40 col)
+    -b/--big      big portrait (about 60 col)
     -c/--color   truecolor with block chars (photo-like)
     -a/--ansi    truecolor with ASCII chars
     -n/--no-color  monochrome (classic ASCII)
     -t/--think   thought bubble
     -W N         text width (default 40)
     --plain      print portrait only
+    --version    print the version and exit
 
 Without color flags, it auto-detects: color if output is a compatible
 terminal, monochrome if redirected to a file or pipe.
+
+The column counts are what regenerate.py bakes into art.blob by default,
+not a property of the flags: a character can be rendered at any width,
+and a landscape subject needs more columns to stand as tall as a face.
 
 The cast, the portraits and the bubble live in whocast.py, shared with
 whonews.py. Characters live in characters/<name>/art.blob (see regenerate.py

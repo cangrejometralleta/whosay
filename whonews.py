@@ -30,7 +30,7 @@ Usage:
     whonews.py --topic WORLD            # a Google News section
     whonews.py --query "inteligencia artificial"
     whonews.py --headlines              # no model, just one random headline
-    whonews.py --model gemma4:latest    # sharper takes, far slower
+    whonews.py --model gemma-3-4b       # sharper takes, far slower
     whonews.py --refresh                # ignore the cache, ask again
 
 Feeds and opinions are cached in SQLite (~/.cache/whosay/news.db), so a
@@ -66,7 +66,7 @@ Options:
                       (default $LLAMA_HOST or http://127.0.0.1:8080)
     --model NAME      model for the chosen provider
                       (default $WHONEWS_MODEL, else the provider's own
-                      default: local / claude-haiku-4-5-20251001 /
+                      default: coder-3b / claude-haiku-4-5-20251001 /
                       gpt-4o-mini)
     --headlines       skip the model, print the raw headlines
     --timeout SEC     per-request timeout for the model (default 120)
@@ -74,7 +74,7 @@ Options:
     --ttl MIN         how long a cached feed stays fresh (default 1440 = 1 day)
     --refresh         re-fetch the feed and re-ask the model
     --no-cache        don't read or write the cache at all
-    --history [N]     print the last N archived takes and exit
+    --history [N]     print the last N archived takes and exit (default 10)
     --prune DAYS      drop takes older than DAYS (default 7, 0 keeps all)
     --joke-chance P   chance (0-1) of a standalone joke instead of a news
                       take (default 0.1)
@@ -88,8 +88,11 @@ Options:
     --anecdote [NAME]
                       always tell a brief anecdote and exit; optionally give
                       which character stars in it (default: one random)
-    plus every whosay look flag: -s/-m/-b, -c/-a/-W (they live in
-                      whocast.py, shared by both scripts)
+    --version         print the version and exit
+    plus every whosay look flag: -s/-m/-b, -c/-a/--no-color, -W (they
+                      live in whocast.py, shared by both scripts). -n is
+                      --count here, so the mono flag goes by its long
+                      name alone.
 """
 import argparse
 import html

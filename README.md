@@ -24,18 +24,24 @@ python3 whosay.py --list-characters
 | `-C`, `--character NAME` | which character to draw (default: a random one) |
 | `--list-characters` | list the available characters and exit |
 | `--random` | pick a random character (the default) |
-| `-s`, `--small` | small portrait, 20 columns (default) |
-| `-m`, `--medium` | medium portrait, 40 columns |
-| `-b`, `--big` | big portrait, 60 columns |
+| `-s`, `--small` | small portrait, about 20 columns (default) |
+| `-m`, `--medium` | medium portrait, about 40 columns |
+| `-b`, `--big` | big portrait, about 60 columns |
 | `-c`, `--color` | blocks + truecolor: almost the photo |
 | `-a`, `--ansi` | ASCII chars + truecolor |
 | `-n`, `--no-color` | monochrome, classic ASCII |
 | `-t`, `--think` | thought bubble |
 | `-W N` | text width (default 40) |
 | `--plain` | portrait only, no bubble |
+| `--version` | print the version and exit |
 
 Without flags it auto-detects: color with blocks if output is a compatible
 terminal, monochrome if redirected to a file or pipe. Respects `NO_COLOR`.
+
+The column counts are what `regenerate.py` bakes into `art.blob` by
+default, not a property of the flags. A character can be rendered at any
+width, and a landscape subject needs more columns to stand as tall as a
+face — `horseshoe_crab` is 28/48/68 for that reason.
 
 The `-c` mode needs a truecolor (24-bit) terminal: iTerm2, Kitty, Alacritty,
 WezTerm, GNOME Terminal, Windows Terminal. If it looks off, use `-a` instead.
@@ -120,14 +126,14 @@ one of them picked at random, on a local
 somewhere else with `--provider`.
 10% of the time it skips the news and the character just cracks a sarcastic
 joke; 10% the character invents a brief anecdote in its own style, starring
-itself alongside up to two other random characters; and the remaining 10%, it
+itself alongside one other random character; and the remaining 10%, it
 just drops its signature phrase. `--joke-chance`, `--anecdote-chance` and
 `--signature-chance` change the split. Either way, prints one panel through
 `whosay`. Stdlib only — no extra dependencies.
 
 ```bash
 llama-server -m model.gguf --port 8080 &   # if it isn't already running
-python3 whonews.py                          # a random character's take, Chile
+python3 whonews.py                          # a random character, in its own region
 ```
 
 ```
@@ -159,7 +165,7 @@ Chiste con Carmen Gloria
 ```
 
 and, the remaining 10% of the time, a brief anecdote in the character's own
-style, starring itself and up to two other characters picked at random:
+style, starring itself and one other character picked at random:
 
 ```
 Anécdota con Carmen Gloria
@@ -220,15 +226,16 @@ without the header. The header's language comes from the character's
 | `--timeout SEC` | model timeout (default 120) |
 | `--refresh` | ignore the cache: re-fetch the feed and re-ask the model |
 | `--no-cache` | don't read or write the cache at all |
-| `--ttl MIN` | how long a cached feed stays fresh (default 15) |
+| `--ttl MIN` | how long a cached feed stays fresh (default 1440 = 1 day) |
 | `--db PATH` | cache location |
 | `--history [N]` | print the last N archived takes for the selected character (default 10) and exit |
 | `--prune DAYS` | drop takes older than DAYS (default 7, `0` keeps everything) |
 | `--joke-chance P` | chance (0-1) of a standalone joke instead of a news take (default 0.1) |
-| `--anecdote-chance P` | chance (0-1) the character tells a brief anecdote with up to two other random characters instead (default 0.1) |
+| `--anecdote-chance P` | chance (0-1) the character tells a brief anecdote with one other random character instead (default 0.1) |
 | `--signature-chance P` | chance (0-1) the character just drops its signature phrase instead (default 0.1) |
 | `--signature` | always print the character's signature phrase and exit |
-| `--anecdote [NAME ...]` | always tell a brief anecdote and exit; optionally list which characters star in it (default: up to two random) |
+| `--anecdote [NAME]` | always tell a brief anecdote and exit; optionally give which character stars in it (default: one random) |
+| `--version` | print the version and exit |
 
 It also takes the `whosay` look flags: `-s`/`-m`/`-b`, `-c`/`-a`/`--no-color`, `-W`.
 
@@ -500,6 +507,8 @@ pick one (default: a random one).
 
    This writes `characters/nuevo_personaje/art.blob`, with all three sizes —
    `--small` (20 col), `--medium` (40 col) and `--big` (60 col) — baked in.
+   Those defaults suit a portrait; a wide subject needs more columns to
+   reach the same height, since the rows follow from them.
    Works best with a transparent-background PNG: the alpha channel cuts out
    the silhouette. Use `--no-crop` for the full image, and `--small`/
    `--medium`/`--big` to tweak the column width of each size.
