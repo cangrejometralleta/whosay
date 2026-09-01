@@ -513,6 +513,19 @@ whosay -C nuevo_personaje "probando"
 whonews -C nuevo_personaje
 ```
 
+## Tests
+
+Stdlib `unittest`, no runner to install, no network touched:
+
+```bash
+python3 -m unittest test_whonews -v
+```
+
+`test_whonews.py` pins two things: the backend resolution order — which
+provider answers, with which key, against which url, including that a key
+lying around does *not* move the run off the local server — and the fallback
+chain a silent model drops into (archive, then the canned line).
+
 ## Files
 
 - `whocast.py` — the cast, the portraits and the bubble, shared by both scripts (no dependencies)
@@ -520,5 +533,6 @@ whonews -C nuevo_personaje
 - `whonews.py` — Google News + a local model, read out loud by a character
 - `characters/` — one folder per character: art, persona, joke prompt
 - `regenerate.py` — regenerates a character's art from a photo
+- `test_whonews.py` — backend resolution and silent-model fallback tests
 - `build.sh` — PyInstaller build of both binaries (the `.spec` files it leaves behind are generated)
 - `whonews-preview.png` — example terminal output, shown at the top of this file
