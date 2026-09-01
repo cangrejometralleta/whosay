@@ -17,6 +17,10 @@ Usage:
 The question comes from the command line, or from stdin when the command
 line has none — so a pipe works as well as an argument.
 
+A header line names who is answering and repeats the question, printed
+before the model is called so it is on screen while the answer is still
+being written. Its language follows the character's own.
+
 Options:
     -C, --character NAME  which character answers (default: a random one)
     --random              a random character answers (the default)
@@ -73,6 +77,15 @@ OPINION_PROMPT = (
     "{}"
 )
 
+# Header line printed above the answer, in the character's language and
+# formatted with its display name — the question follows it on the same line,
+# so you can see what was asked next to who is answering it.
+OPINION_LABELS = {
+    "Spanish": "La opinión de {} sobre:",
+    "English": "{}'s take on:",
+    "Portuguese": "A opinião de {} sobre:",
+}
+
 
 def main(argv=None):
     """Main Parses the Args,
@@ -88,12 +101,13 @@ def main(argv=None):
     try:
         character = resolve_character_choice(args)
         char = whocast.load_character(character)
-        size = whocast.pick_size(args.size)
-        portrait = whocast.load_character_art(character, size, whocast.pick_mode(args.mode))
+        size, mode = whocast.pick_size(args.size), whocast.pick_mode(args.mode)
+        portrait = whocast.load_character_art(character, size, mode)
     except whocast.CharacterNotFound as e:
         print("whoopinion: {}".format(e), file=sys.stderr)
         return 1
 
+    print_question_title(mode, resolve_opinion_label(char), question)
     answer = ask_character_opinion(char, question, whonews.build_model_backend(args))
 
     whocast.print_character_panel(answer, portrait, size, args.width, args.think)
@@ -140,6 +154,27 @@ def resolve_character_choice(args):
     if character != args.character:
         print("whoopinion: character: {}".format(character), file=sys.stderr)
     return character
+
+
+def resolve_opinion_label(char):
+    """ResolveOpinionLabel Returns the header Label in the character's language,
+       falling back to Spanish the way whonews does."""
+    label = OPINION_LABELS.get(char.get("language"), OPINION_LABELS["Spanish"])
+    return label.format(char.get("display_name", ""))
+
+
+def print_question_title(mode, label, question):
+    """PrintQuestionTitle Prints who is answering beside the Question they were asked,
+       colored when the terminal takes it.
+
+    Printed before the model is called, so the question is on screen while
+    the answer is still being written.
+    """
+    if mode == "mono":
+        print("{} {}".format(label, question))
+    else:
+        print("\033[36m{}\033[0m \033[1m{}\033[0m".format(label, question))
+    sys.stdout.flush()
 
 
 def ask_character_opinion(char, question, backend):

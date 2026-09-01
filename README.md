@@ -383,14 +383,23 @@ python3 whoopinion.py "are tabs better than spaces?"
 ```
 
 ```
+Horseshoe Crab's take on: are tabs better than spaces?
   __________________________________________
- / Tabs are not better than spaces, as each \
- \ has its advantages.                      /
+ / Tabs and spaces are both tools, but      \
+ | spaces are more practical in most modern |
+ \ programming environments.                /
   ------------------------------------------
     \
      \
    ...
 ```
+
+The header names who is answering and repeats the question, so a panel
+scrolled past still says what it was answering. It is printed before the
+model is called — it shows while the answer is still being written — and it
+follows the character's own language, `"La opinión de {display_name} sobre:"`
+for `"Spanish"` and `"A opinião de {display_name} sobre:"` for
+`"Portuguese"`. Bold and colored where the terminal allows, plain otherwise.
 
 The question comes from the command line, or from **stdin** when the command
 line has none — so a pipe works as well as an argument, and anything that
