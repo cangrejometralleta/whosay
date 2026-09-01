@@ -1,8 +1,9 @@
 # whosay
 
 Like `cowsay`, but with a cast of characters — Carmen Gloria Arroyo is the
-default and most iconic one, but not the only one possible. A zero-dependency
-Python script that prints a speech bubble over an ASCII portrait.
+most iconic one, but not the only one possible: every run picks a character at
+random unless you name one. A zero-dependency Python script that prints a
+speech bubble over an ASCII portrait.
 
 ![terminal example: whonews -C st_ignucius](whonews-preview.png)
 
@@ -12,7 +13,7 @@ Python script that prints a speech bubble over an ASCII portrait.
 python3 whosay.py "Hello, good afternoon"
 echo "text from a pipe" | python3 whosay.py
 git log -1 --format=%s | python3 whosay.py -b
-python3 whosay.py -C some_other_character "hi"
+python3 whosay.py -C some_other_character "hi"   # always the same one
 python3 whosay.py --list-characters
 ```
 
@@ -20,9 +21,9 @@ python3 whosay.py --list-characters
 
 | Flag | What it does |
 |---|---|
-| `-C`, `--character NAME` | which character to draw (default `carmen_gloria`) |
+| `-C`, `--character NAME` | which character to draw (default: a random one) |
 | `--list-characters` | list the available characters and exit |
-| `--random` | pick a random character |
+| `--random` | pick a random character (the default) |
 | `-s`, `--small` | small portrait, 20 columns (default) |
 | `-m`, `--medium` | medium portrait, 40 columns |
 | `-b`, `--big` | big portrait, 60 columns |
@@ -56,9 +57,12 @@ ln -sf "$PWD/whonews.py" ~/.local/bin/whonews
 whonews "it works"
 ```
 
-It has to keep living next to the repo either way: it does `import whosay`
-and reads `characters/` straight off disk, so the symlink only works while
-the checkout stays in place.
+Both symlinks keep pointing at the checkout: each script does `import
+whocast` (the module they share, see [Shared code](#shared-code-whocastpy))
+and reads `characters/` straight off disk, so they only work while the
+checkout stays in place. They find it through the symlink, not beside it —
+the path is resolved with `realpath`, so `~/.local/bin` doesn't need a
+`characters/` folder of its own.
 
 ### Compile to standalone binary
 
@@ -66,8 +70,15 @@ You can build a self-contained binary with PyInstaller:
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --add-data "characters:characters" whosay.py
+./build.sh                  # both binaries, or one at a time:
+pyinstaller --onefile --paths . --add-data "characters:characters" whosay.py
 ```
+
+`--paths .` is what pulls `whocast.py` in: PyInstaller follows the import and
+bundles the module into the binary, so the result doesn't need the checkout.
+It lands in the generated `whosay.spec` / `whonews.spec` as `pathex=['.']` —
+those are build artifacts, rewritten on every run and gitignored, so edit
+`build.sh`, not them.
 
 The binary lands in `dist/whosay`. Copy it to any `PATH` folder — no Python,
 Pillow, or loose character files needed.
@@ -87,11 +98,11 @@ whosay "Hello from a binary"
 The code uses `sys._MEIPASS` to find `characters/` inside the bundle, falling
 back to the loose directory next to the script during development.
 
-This only builds `whosay`. `whonews.py` isn't bundled in — compile it the
-same way if you want a standalone `whonews` binary too:
+`build.sh` builds both. On its own, that first command only builds `whosay`
+— `whonews.py` is a separate binary, compiled the same way:
 
 ```bash
-pyinstaller --onefile --add-data "characters:characters" whonews.py
+pyinstaller --onefile --paths . --add-data "characters:characters" whonews.py
 ```
 
 To greet you on terminal start, add to `~/.bashrc` or `~/.zshrc`:
@@ -103,9 +114,10 @@ whosay -m "Good morning, $USER"
 ## The news anchor: `whonews.py`
 
 Pulls the day's top stories from Google News RSS and, 70% of the time by
-default, asks a local model through a [llama.cpp](https://github.com/ggml-org/llama.cpp)
-server for a one-line take — in a character's voice — about one of them
-picked at random.
+default, asks a model for a one-line take — in a character's voice — about
+one of them picked at random, on a local
+[llama.cpp](https://github.com/ggml-org/llama.cpp) server unless you point it
+somewhere else with `--provider`.
 10% of the time it skips the news and the character just cracks a sarcastic
 joke; 10% the character invents a brief anecdote in its own style, starring
 itself alongside up to two other random characters; and the remaining 10%, it
@@ -115,7 +127,7 @@ just drops its signature phrase. `--joke-chance`, `--anecdote-chance` and
 
 ```bash
 llama-server -m model.gguf --port 8080 &   # if it isn't already running
-python3 whonews.py                          # one random take, Chile
+python3 whonews.py                          # a random character's take, Chile
 ```
 
 ```
@@ -191,13 +203,18 @@ without the header. The header's language comes from the character's
 | Flag | What it does |
 |---|---|
 | `-n N` | pool size to pick a headline from at random (default 5) |
-| `-C`, `--character NAME` | which character comments (default `carmen_gloria`) |
-| `--random` | pick a random character |
+| `-C`, `--character NAME` | which character comments (default: a random one) |
+| `--random` | pick a random character (the default) |
 | `--topic NAME` | Google News section: `world`, `nation`, `business`, `technology`, `science`, `sports`, `entertainment`, `health` |
 | `--query TEXT` | search a term instead of browsing a section (default: the character's `topic` field) |
 | `--region CODE` | Google News country code (default: from the character's `nationality`, else `CL`) |
 | `--lang CODE` | language code (default: from the character's `language`, else `es-419`) |
-| `--provider NAME` | `ollama`, `anthropic` or `openai` (default `$WHONEWS_PROVIDER` or `ollama`) |
+| `--provider NAME` | `ollama`, `anthropic` or `openai` (default `$WHONEWS_PROVIDER`, else `ollama`: the local `llama-server`) |
+| `--anthropic-key KEY` | Anthropic credential (default `$ANTHROPIC_API_KEY`) |
+| `--anthropic-url URL` | Anthropic base url (default `$ANTHROPIC_BASE_URL`, else `https://api.anthropic.com`) |
+| `--openai-key KEY` | OpenAI credential (default `$OPENAI_API_KEY`) |
+| `--openai-url URL` | OpenAI base url (default `$OPENAI_BASE_URL`, else `https://api.openai.com`) |
+| `--ollama-url URL` | local `llama-server` base url (default `$LLAMA_HOST`, else `http://127.0.0.1:8080`) |
 | `--model NAME` | model for the chosen provider (default `$WHONEWS_MODEL`, else the provider's own default) |
 | `--headlines` | skip the model, just print one random headline |
 | `--timeout SEC` | model timeout (default 120) |
@@ -220,16 +237,20 @@ A character's `nationality`, `language` and `topic` fields (see
 search query — `--region`, `--lang` and `--query` override them per run.
 
 Defaults can come from the environment: `WHONEWS_PROVIDER`, `WHONEWS_MODEL`,
-`WHONEWS_REGION`, `WHONEWS_LANG`, `WHONEWS_DB`, plus `LLAMA_HOST` if your
-`llama-server` isn't on `127.0.0.1:8080`.
+`WHONEWS_REGION`, `WHONEWS_LANG`, `WHONEWS_DB`, the credentials
+`ANTHROPIC_API_KEY` and `OPENAI_API_KEY`, and the endpoints
+`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL` and `LLAMA_HOST`. Every one of them
+has a flag that outranks it.
 
 ```bash
 WHONEWS_MODEL=gemma-3-4b python3 whonews.py -n 3 --topic technology
 python3 whonews.py --query "arte contemporáneo" --region AR --lang es-419
-python3 whonews.py -C some_other_character
+python3 whonews.py -C some_other_character               # always the same one
 python3 whonews.py --joke-chance 0.5   # jokes half the time instead of 10%
 python3 whonews.py --provider anthropic
 python3 whonews.py --provider openai --model gpt-4o
+python3 whonews.py --provider anthropic --anthropic-key sk-ant-...
+python3 whonews.py --provider openai --openai-key sk-... --openai-url https://gateway.internal
 ```
 
 ### Providers
@@ -239,19 +260,40 @@ python3 whonews.py --provider openai --model gpt-4o
 
 | Provider | Default model | Credential |
 |---|---|---|
-| `ollama` (default) | `coder-3b` — see [Picking a model](#picking-a-model) | none — talks to a local `llama-server`, `$LLAMA_HOST` if not on `127.0.0.1:8080` |
-| `anthropic` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` env var |
-| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` env var |
+| `ollama` | `coder-3b` — see [Picking a model](#picking-a-model) | none — talks to a local `llama-server` |
+| `anthropic` | `claude-haiku-4-5-20251001` | `--anthropic-key` or `$ANTHROPIC_API_KEY` |
+| `openai` | `gpt-4o-mini` | `--openai-key` or `$OPENAI_API_KEY` |
 
-The default provider is still called `ollama` (so existing `--provider`/
+Each backend's endpoint moves too: `--anthropic-url`, `--openai-url` and
+`--ollama-url` (or `$ANTHROPIC_BASE_URL`, `$OPENAI_BASE_URL`, `$LLAMA_HOST`)
+point a provider at a gateway, a proxy or a mock. The path is appended for
+you — pass the base only, e.g. `https://gateway.internal`.
+
+With no `--provider` and no `$WHONEWS_PROVIDER`, the backend is always
+`ollama`, the local server. A key lying around in the environment doesn't
+change that: the local server is free, so paying for a call is something you
+ask for, never something you drift into.
+
+The local provider is still called `ollama` (so existing `--provider`/
 `$WHONEWS_PROVIDER` usage doesn't break), but it now talks to a local
 `llama-server` instance over its OpenAI-compatible API instead of the Ollama
 daemon. `--model` overrides the provider's default (as does `$WHONEWS_MODEL`,
 applied regardless of provider — unset it if you switch providers and it's
 still set to something local-specific). Anthropic and OpenAI cost real money
 per call and need network access; the local server is free, which is why it
-stays the default. Missing or wrong credentials fail with a one-line error
-on stderr — no traceback, no accidental retry loop.
+is the default. Missing or wrong credentials fail with a one-line error on
+stderr — no traceback, no accidental retry loop.
+
+### When nothing answers
+
+A run always prints a panel, even with the server down, the key wrong or the
+network out. If the model stays silent — or Google News does — the character
+falls back down a chain, saying on stderr which step it took:
+
+1. its newest **archived take**, replayed with the headline and date it was
+   given for;
+2. its **fallback line** from `character.json`, when the archive is empty;
+3. its **signature phrase**, for a character with no fallback line of its own.
 
 ### The cache
 
@@ -317,6 +359,27 @@ away what you already generated under each name.
 
 The opinions are generated by a language model as a parody. They are not quotes
 from, or endorsed by, any real person.
+
+## Shared code: `whocast.py`
+
+`whosay.py` and `whonews.py` are two CLIs over one module. `whocast.py` holds
+what both of them need, and neither one imports the other:
+
+- **the cast** — `list_characters()`, `pick_character()` (named, else random),
+  `load_character()` for `character.json`, `load_character_art()` for the
+  decoded `art.blob`, and the `CharacterNotFound` they both raise;
+- **the look** — `pick_size()` and `pick_mode()` (the `NO_COLOR`/tty
+  auto-detect), plus the `INDENT` and width defaults;
+- **the bubble** — `render_speech_bubble()`, `render_bubble_tail()` and
+  `print_character_panel()`, the panel both scripts print;
+- **the flags** — `add_character_arguments()` and `add_look_arguments()` build
+  the `-C`/`--random` and `-s`/`-m`/`-b`, `-c`/`-a`/`--no-color`, `-W` groups
+  once, so the two parsers can't drift apart. (`whonews` spends its `-n` on
+  `--count`, so it passes `mono_flags=("--no-color",)`.)
+
+It never prints an error or exits: a missing character raises
+`CharacterNotFound` and each script says it in its own voice, prefixed with
+its own name.
 
 ## Characters
 
@@ -424,7 +487,7 @@ entry to `NATIONALITY_REGION` / `LANGUAGE_CODE` / `LABELS` near the top of
 
 `whosay --list-characters` lists every folder under `characters/` that has an
 `art.blob`; both `whosay.py` and `whonews.py` take `-C`/`--character NAME` to
-pick one (default `carmen_gloria`).
+pick one (default: a random one).
 
 ### Adding a character
 
@@ -452,8 +515,10 @@ whonews -C nuevo_personaje
 
 ## Files
 
-- `whosay.py` — the portrait/bubble renderer, character-agnostic (no dependencies)
+- `whocast.py` — the cast, the portraits and the bubble, shared by both scripts (no dependencies)
+- `whosay.py` — the speech-bubble CLI over `whocast`
 - `whonews.py` — Google News + a local model, read out loud by a character
 - `characters/` — one folder per character: art, persona, joke prompt
 - `regenerate.py` — regenerates a character's art from a photo
+- `build.sh` — PyInstaller build of both binaries (the `.spec` files it leaves behind are generated)
 - `whonews-preview.png` — example terminal output, shown at the top of this file
