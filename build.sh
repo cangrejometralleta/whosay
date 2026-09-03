@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build self-contained whosay, whonews and whoopinion binaries with PyInstaller.
+# BuildStandaloneBinaries — bundles whosay, whonews and whoopinion into
+# self-contained PyInstaller binaries.
 #
 # All three import whocast.py, the module they share, and whoopinion also
 # imports whonews.py for the model backends. --paths . is what lets
@@ -9,14 +10,28 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-if ! command -v pyinstaller >/dev/null 2>&1; then
-  echo "pyinstaller not found, installing..." >&2
+SCRIPTS=(whosay whonews whoopinion)
+
+EnsurePyinstaller() {
+  command -v pyinstaller >/dev/null 2>&1 && return
+  echo "⚠️ PyInstaller Missing, Installing" >&2
   pip install pyinstaller
-fi
+}
 
-pyinstaller --onefile --paths . --add-data "characters:characters" whosay.py
-pyinstaller --onefile --paths . --add-data "characters:characters" whonews.py
-pyinstaller --onefile --paths . --add-data "characters:characters" whoopinion.py
+BuildBinary() {
+  local script=$1
+  echo "🔨 Building ${script}"
+  pyinstaller --onefile --paths . --add-data "characters:characters" "${script}.py"
+}
 
-echo "Done. Binaries in dist/:"
-ls -lh dist/whosay dist/whonews dist/whoopinion
+ReportBinaries() {
+  local paths=("${SCRIPTS[@]/#/dist/}")
+  ls -lh "${paths[@]}"
+  echo "✅ ${#SCRIPTS[@]} Binaries Ready in dist/"
+}
+
+EnsurePyinstaller
+for script in "${SCRIPTS[@]}"; do
+  BuildBinary "$script"
+done
+ReportBinaries

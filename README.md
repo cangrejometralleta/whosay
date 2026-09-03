@@ -622,5 +622,5 @@ chain a silent model drops into (archive, then the canned line).
 - `characters/` — one folder per character: art, persona, joke prompt
 - `regenerate.py` — regenerates a character's art from a photo
 - `test_whonews.py` — backend resolution and silent-model fallback tests
-- `build.sh` — PyInstaller build of all three binaries (the `.spec` files it leaves behind are generated)
+- `build.sh` — PyInstaller build of all three binaries (the `.spec` files it leaves behind are generated), written to the [OneTwoThree](https://github.com/cangrejometralleta/OneTwoThree) manifesto: three-beat functions, `Verb+Noun` names, one emoji per status line
 - `whonews-preview.png` — example terminal output, shown at the top of this file
