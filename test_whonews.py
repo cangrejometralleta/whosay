@@ -13,6 +13,7 @@ swapped for a recorder.
 import io
 import os
 import sys
+import tempfile
 import unittest
 import urllib.error
 from unittest import mock
@@ -54,6 +55,60 @@ def spoken(printed):
 def parse_args(*argv):
     """ParseArgs Runs the whonews parser over argv, with the cache Off."""
     return whonews.parse_whonews_args(["--no-cache", *argv])
+
+
+class ClearNewsCacheTest(unittest.TestCase):
+    """ClearNewsCacheTest Pins that the explicit Command Empties the whole Archive."""
+
+    def test_clear_cache_removes_feeds_and_takes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "news.db")
+            db = whonews.open_news_cache(path, prune_days=0)
+            whonews.store_feed(db, "https://example.test/feed", b"rss")
+            whonews.store_take(db, "Headline", "model", "character", "Source", "Take")
+            db.close()
+
+            output = io.StringIO()
+            with mock.patch.object(
+                    whonews, "resolve_requested_character",
+                    side_effect=AssertionError("character should not be resolved")), \
+                    mock.patch("sys.stdout", output):
+                code = whonews.main(["--db", path, "--clear-cache"])
+
+            db = whonews.open_news_cache(path, prune_days=0)
+            feeds = db.execute("SELECT COUNT(*) FROM feeds").fetchone()[0]
+            takes = db.execute("SELECT COUNT(*) FROM takes").fetchone()[0]
+            db.close()
+
+        self.assertEqual(code, 0)
+        self.assertEqual((feeds, takes), (0, 0))
+        self.assertEqual(output.getvalue(), "whonews: cache cleared\n")
+
+
+class ResolveNewsQueryTest(unittest.TestCase):
+    """ResolveNewsQueryTest Pins how one Character Beat becomes a Search."""
+
+    def test_one_topic_is_chosen_at_random(self):
+        char = whocast.load_character("horseshoe_crab")
+        args = mock.Mock(topic=None, query=None)
+
+        with mock.patch.object(
+                whonews.random, "choice",
+                return_value="ocean conservation") as choose:
+            query = whonews.resolve_news_query(char, args)
+
+        self.assertEqual(query, "ocean conservation")
+        choose.assert_called_once_with(char["topics"])
+
+    def test_an_explicit_query_skips_character_topics(self):
+        char = {"topics": ["marine biology"]}
+        args = mock.Mock(topic=None, query="coastal restoration")
+
+        with mock.patch.object(whonews.random, "choice") as choose:
+            query = whonews.resolve_news_query(char, args)
+
+        self.assertEqual(query, "coastal restoration")
+        choose.assert_not_called()
 
 
 class ResolveDefaultProviderTest(unittest.TestCase):
@@ -268,11 +323,29 @@ class SessionBackendTest(unittest.TestCase):
         self.assertEqual(sent["headers"]["x-api-key"], "sk-ant")
         self.assertEqual(sent["timeout"], args.timeout)
 
+    def test_an_anecdote_title_names_both_characters(self):
+        with clear_backend_env():
+            args = parse_args("-C", "tv_judge", "--no-color")
+            character, char = whonews.resolve_requested_character(args)
+            session = whonews.build_news_session(character, char, args)
+
+        with mock.patch.object(
+                whonews, "resolve_anecdote_cast",
+                return_value="Prince of Darkness"), \
+                mock.patch.object(whonews, "render_take_safely", return_value="Una anécdota."), \
+                mock.patch.object(whonews, "print_title") as print_title, \
+                mock.patch.object(whonews, "print_character_panel"):
+            self.assertEqual(
+                whonews.run_anecdote_command(session, "prince_of_darkness"), 0)
+
+        print_title.assert_called_once_with(
+            "mono", "Anécdota de Jueza de la tele con Prince of Darkness")
+
 
 class SilentModelTest(unittest.TestCase):
     """SilentModelTest Pins what a run prints when the model never answers."""
 
-    CHARACTER = "carmen_gloria"
+    CHARACTER = "tv_judge"
 
     def setUp(self):
         with clear_backend_env():

@@ -1,10 +1,13 @@
 # whosay
 
-Like `cowsay`, but with a cast of characters — Carmen Gloria Arroyo is the
-most iconic one, but not the only one possible: every run picks a character at
-random unless you name one. A zero-dependency Python script that prints a
+Like `cowsay`, but with a cast of characters: every run picks one at random
+unless you name one. A zero-dependency Python script that prints a
 speech bubble over an ASCII portrait — plus two siblings that fill the
 bubble themselves, from the day's news or from a question you ask.
+
+Characters use generic role names rather than real-person names. The sole
+exception is `st_ignucius`, a parody persona representing free software and
+the GNU tradition rather than a public figure's likeness.
 
 ![terminal example: whonews -C st_ignucius](whonews-preview.png)
 
@@ -142,7 +145,7 @@ python3 whonews.py                          # a random character, in its own reg
 ```
 
 ```
-Noticias con Carmen Gloria
+Noticias con Jueza de la tele
 2026-08-14  UDI advierte al INDH con "consecuencias" por eventual visita a reos de cárcel de Talca (BioBioChile)
    __________________________________________
   / El miedo institucional es el mejor       \
@@ -157,7 +160,7 @@ Noticias con Carmen Gloria
 or, the other 10% of the time, no headline at all:
 
 ```
-Chiste con Carmen Gloria
+Chiste con Jueza de la tele
    __________________________________________
   / ¿Sabes por qué Chile está tan            \
   | emocionado? Porque finalmente            |
@@ -173,7 +176,7 @@ and, the remaining 10% of the time, a brief anecdote in the character's own
 style, starring itself and one other character picked at random:
 
 ```
-Anécdota con Carmen Gloria
+Anécdota de Jueza de la tele con St. IGNUcius
    __________________________________________
   / Estoy asustada ante las puertas de la    \
   | catedral de Salamanca, donde se iba a    |
@@ -191,9 +194,9 @@ Anécdota con Carmen Gloria
 and the last 10%, the character just drops its signature phrase:
 
 ```
-The catchphrase of Ozzy Osbourne
+The catchphrase of Prince of Darkness
    _________
-  < SHARON! >
+  < BLOODY HELL! >
    ---------
      \
       \
@@ -205,10 +208,11 @@ supports it. `--headlines` prints the same header + dated headline (no
 opinion); `--history` prints the same dated headline per archived entry,
 without the header. The header's language comes from the character's
 `language` field (see [Characters](#characters)) — `"News with
-{display_name}"` / `"Joke with {display_name}"` / `"Anecdote with
-{display_name}"` / `"The catchphrase of {display_name}"` for `"English"`,
+{display_name}"` / `"Joke with {display_name}"` / `"Anecdote of
+{display_name} with {other_name}"` / `"The catchphrase of {display_name}"`
+for `"English"`,
 `"Notícias com {display_name}"` / `"Piada com {display_name}"` /
-`"Anedota com {display_name}"` / `"A frase de {display_name}"` for
+`"Anedota de {display_name} com {other_name}"` / `"A frase de {display_name}"` for
 `"Portuguese"`, and the Spanish text above otherwise.
 
 | Flag | What it does |
@@ -217,7 +221,7 @@ without the header. The header's language comes from the character's
 | `-C`, `--character NAME` | which character comments (default: a random one) |
 | `--random` | pick a random character (the default) |
 | `--topic NAME` | Google News section: `world`, `nation`, `business`, `technology`, `science`, `sports`, `entertainment`, `health` |
-| `--query TEXT` | search a term instead of browsing a section (default: the character's `topic` field) |
+| `--query TEXT` | search a term instead of browsing a section (default: one random entry from the character's `topics` field) |
 | `--region CODE` | Google News country code (default: from the character's `nationality`, else `CL`) |
 | `--lang CODE` | language code (default: from the character's `language`, else `es-419`) |
 | `--provider NAME` | `ollama`, `anthropic` or `openai` (default `$WHONEWS_PROVIDER`, else `ollama`: the local `llama-server`) |
@@ -231,6 +235,7 @@ without the header. The header's language comes from the character's
 | `--timeout SEC` | model timeout (default 120) |
 | `--refresh` | ignore the cache: re-fetch the feed and re-ask the model |
 | `--no-cache` | don't read or write the cache at all |
+| `--clear-cache` | remove every cached feed and archived take, then exit |
 | `--ttl MIN` | how long a cached feed stays fresh (default 1440 = 1 day) |
 | `--db PATH` | cache location |
 | `--history [N]` | print the last N archived takes for the selected character (default 10) and exit |
@@ -244,7 +249,7 @@ without the header. The header's language comes from the character's
 
 It also takes the `whosay` look flags: `-s`/`-m`/`-b`, `-c`/`-a`/`--no-color`, `-W`.
 
-A character's `nationality`, `language` and `topic` fields (see
+A character's `nationality`, `language` and `topics` fields (see
 [Characters](#characters) below) drive the region, language and default
 search query — `--region`, `--lang` and `--query` override them per run.
 
@@ -407,7 +412,7 @@ writes to a pipe becomes a question:
 
 ```bash
 echo "why is the sky blue?" | python3 whoopinion.py
-git log -1 --format=%s | python3 whoopinion.py -C ozzy      # ask about a commit
+git log -1 --format=%s | python3 whoopinion.py -C prince_of_darkness  # ask about a commit
 python3 whoopinion.py -C horseshoe_crab "should I flip you over?"
 cat error.log | python3 whoopinion.py -C st_ignucius -b     # ask about a file
 python3 whoopinion.py --provider anthropic "is this a good idea?"
@@ -473,13 +478,13 @@ Everything that makes a character who they are lives under
 
 ```
 characters/
-  carmen_gloria/
+  tv_judge/
     art.blob          # the ASCII portrait, all sizes and color modes
-    character.json     # display_name, nationality, topic, language,
+    character.json     # display_name, nationality, topics, language,
                         # persona, joke_prompt, fallback
     photo.png           # (optional, local only) the source photo
                         # art.blob was built from
-  pamela_lagos/
+  tv_psycologist/
     art.blob
     character.json
     photo.png
@@ -512,42 +517,43 @@ before running `regenerate.py`) stays on your machine and is never committed:
 
 ```json
 {
-  "display_name": "Carmen Gloria",
+  "display_name": "Jueza de la tele",
   "nationality": "Chilean",
-  "topic": "Latin American politics and cultural criticism",
+  "topics": ["Latin American politics", "cultural criticism"],
   "language": "Spanish",
-  "persona": "Eres Carmen Gloria: periodista y crítica cultural...",
+  "persona": "Eres una jueza de televisión chilena y crítica cultural...",
   "joke_prompt": "Cuenta un chiste corto y sarcástico sobre...",
   "fallback": "Prefiero no comentar. Y eso ya es un comentario.",
-  "signature": "¡Que pase la psicóloga Pamela Lagos!"
+  "signature": "¡Que pase la psicóloga de televisión!"
 }
 ```
 
-For example, `pamela_lagos` — a Chilean psychologist (magíster en psicobiología
-y neurociencia cognitiva) who reads the news through a warm, evidence-based,
+For example, `tv_psycologist` — a Chilean television psychologist who reads
+the news through a warm, evidence-based,
 mental-health lens:
 
 ```json
 {
-  "display_name": "Pamela Lagos",
+  "display_name": "Psicóloga de la tele",
   "nationality": "Chilean",
-  "topic": "salud mental, neurociencia, inteligencia artificial y actualidad",
+  "topics": ["salud mental", "neurociencia", "inteligencia artificial"],
   "language": "Spanish",
-  "persona": "Eres Pamela Lagos: psicóloga chilena, magíster en psicobiología y neurociencia cognitiva...",
+  "persona": "Eres una psicóloga de televisión chilena, especialista en psicobiología y neurociencia cognitiva...",
   "joke_prompt": "Cuenta un chiste breve y cariñoso sobre psicología, neurociencia, terapia o la vida moderna...",
   "fallback": "Prefiero escuchar antes que opinar. Y eso ya es una opinión.",
   "signature": "Respiremos hondo: todo pasa por el cerebro."
 }
 ```
 
-Her `topic` makes her default search cover Chilean and world affairs plus AI and
-mental health, so `whonews -C pamela_lagos` tends to land on those beats.
+Her `topics` make each default search randomly cover subjects such as AI,
+neuroscience or mental health, so repeated `whonews -C tv_psycologist` runs
+can land on different beats.
 
 - `nationality` — looked up in `whonews.py`'s `NATIONALITY_REGION` table to
   pick a default `--region` (e.g. `"Chilean"` → `CL`). Falls back to `CL` if
   the nationality is missing or not in the table.
-- `topic` — the character's beat; used as the default `--query` whenever a
-  run doesn't pass `--topic` or `--query` explicitly.
+- `topics` — the character's beats; one entry is picked randomly as the
+  default `--query` whenever a run doesn't pass `--topic` or `--query`.
 - `language` — looked up in `whonews.py`'s `LANGUAGE_CODE` table to pick a
   default `--lang` (e.g. `"Spanish"` → `es-419`), and in its `LABELS` table
   to pick the "News with .../Joke with ..." header language. Falls back to
@@ -560,7 +566,7 @@ mental health, so `whonews -C pamela_lagos` tends to land on those beats.
 - `signature` — a fixed catchphrase the character drops instead of a take,
   joke or anecdote on `--signature-chance` (default 0.1) of runs. Optional.
 
-`nationality`, `topic` and `language` are optional — a character without
+`nationality`, `topics` and `language` are optional — a character without
 them just falls back to `CL`/`es-419` and browses the default Google News
 feed instead of a topic search. Any `--region`/`--lang`/`--query` flag (or
 `WHONEWS_REGION`/`WHONEWS_LANG` env var) passed at the command line wins

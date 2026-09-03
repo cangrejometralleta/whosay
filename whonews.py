@@ -32,6 +32,7 @@ Usage:
     whonews.py --headlines              # no model, just one random headline
     whonews.py --model gemma-3-4b       # sharper takes, far slower
     whonews.py --refresh                # ignore the cache, ask again
+    whonews.py --clear-cache            # clear cached feeds and takes
 
 Feeds and opinions are cached in SQLite (~/.cache/whosay/news.db), so a
 second run costs nothing and the takes pile up into an archive. A fetched
@@ -48,7 +49,8 @@ Options:
     --topic NAME      WORLD, NATION, BUSINESS, TECHNOLOGY, SCIENCE, SPORTS,
                       ENTERTAINMENT, HEALTH
     --query TEXT      search instead of browsing a section
-                      (default: the character's "topic" field)
+                      (default: a random entry from the character's
+                      "topics" field)
     --region CODE     country code for Google News
                       (default: from the character's "nationality", else CL)
     --lang CODE       language code
@@ -74,6 +76,7 @@ Options:
     --ttl MIN         how long a cached feed stays fresh (default 1440 = 1 day)
     --refresh         re-fetch the feed and re-ask the model
     --no-cache        don't read or write the cache at all
+    --clear-cache     remove every cached feed and archived take, then exit
     --history [N]     print the last N archived takes and exit (default 10)
     --prune DAYS      drop takes older than DAYS (default 7, 0 keeps all)
     --joke-chance P   chance (0-1) of a standalone joke instead of a news
@@ -140,8 +143,8 @@ DEFAULT_MODELS = {
 
 
 @dataclass(frozen=True)
-class ProviderPort:
-    """ProviderPort Names where one backend's Key and base Url come from."""
+class BackendRoute:
+    """BackendRoute Names where one model Backend's Credential and Endpoint come from."""
     key_arg: str      # --<name>-key, None for a backend that needs no key
     key_env: str
     url_arg: str      # --<name>-url
@@ -153,12 +156,12 @@ class ProviderPort:
 # the default. Add a backend here (plus its call in PROVIDERS and its model
 # in DEFAULT_MODELS) to support another one.
 PROVIDER_PORTS = {
-    "ollama": ProviderPort(
+    "ollama": BackendRoute(
         None, None, "ollama_url", "LLAMA_HOST", "http://127.0.0.1:8080"),
-    "anthropic": ProviderPort(
+    "anthropic": BackendRoute(
         "anthropic_key", "ANTHROPIC_API_KEY",
         "anthropic_url", "ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
-    "openai": ProviderPort(
+    "openai": BackendRoute(
         "openai_key", "OPENAI_API_KEY",
         "openai_url", "OPENAI_BASE_URL", "https://api.openai.com"),
 }
@@ -187,11 +190,12 @@ LANGUAGE_CODE = {
 
 # Header line printed before the headline/joke/anecdote/signature, in the
 # character's language. (news_label, joke_label, anecdote_label, signature_label),
-# each formatted with the character's display name.
+# the anecdote label is formatted with both participants; the others with
+# the speaking character's display name.
 LABELS = {
-    "Spanish": ("Noticias con {}", "Chiste con {}", "Anécdota con {}", "La frase de {}"),
-    "English": ("News with {}", "Joke with {}", "Anecdote with {}", "The catchphrase of {}"),
-    "Portuguese": ("Notícias com {}", "Piada com {}", "Anedota com {}", "A frase de {}"),
+    "Spanish": ("Noticias con {}", "Chiste con {}", "Anécdota de {} con {}", "La frase de {}"),
+    "English": ("News with {}", "Joke with {}", "Anecdote of {} with {}", "The catchphrase of {}"),
+    "Portuguese": ("Notícias com {}", "Piada com {}", "Anedota de {} com {}", "A frase de {}"),
 }
 
 
@@ -200,14 +204,21 @@ def main(argv=None):
        Resolves the Character and Session,
        then Runs the matching whonews Command."""
     args = parse_whonews_args(argv)
+    if args.clear_cache:
+        return clear_news_command(args)
 
     try:
         character, char = resolve_requested_character(args)
-    except whocast.CharacterNotFound as e:
-        print("whonews: {}".format(e), file=sys.stderr)
+    except whocast.CharacterNotFound as error:
+        print("whonews: {}".format(error), file=sys.stderr)
         return 1
 
     session = build_news_session(character, char, args)
+    return run_requested_command(session, args)
+
+
+def run_requested_command(session, args):
+    """RunRequestedCommand Selects and Runs the one Story requested by the Args."""
 
     if args.signature:
         return run_signature_command(session)
@@ -227,9 +238,9 @@ def parse_whonews_args(argv):
         prog="whonews",
         description="The day's headlines, with a character's opinion (parody).",
         epilog="example:\n"
-               "  whonews -C ozzy -n 3\n"
+               "  whonews -C prince_of_darkness -n 3\n"
                "  whonews --topic technology -a -b\n"
-               "  whonews --anecdote carmen_gloria\n"
+               "  whonews --anecdote tv_judge\n"
                "  whonews --history 10",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -239,7 +250,7 @@ def parse_whonews_args(argv):
     parser.add_argument("--topic", choices=[s.lower() for s in SECTIONS] + list(SECTIONS),
                          help="Google News section")
     parser.add_argument("--query", help="search term instead of a section "
-                         "(default: the character's favorite topic)")
+                         "(default: one random character topic)")
     parser.add_argument("--region", default=None,
                          help="country code for Google News "
                               "(default: from the character's nationality, else {})".format(DEFAULT_REGION))
@@ -253,6 +264,8 @@ def parse_whonews_args(argv):
                          help="feed freshness (minutes, default {} = 1 day)".format(DEFAULT_TTL_MIN))
     parser.add_argument("--refresh", action="store_true", help="re-fetch and re-ask")
     parser.add_argument("--no-cache", action="store_true", help="ignore the cache entirely")
+    parser.add_argument("--clear-cache", action="store_true",
+                         help="remove every cached feed and archived take, then exit")
     parser.add_argument("--history", nargs="?", type=int, const=DEFAULT_HISTORY_N, metavar="N",
                          help="print the last N archived takes and exit")
     parser.add_argument("--prune", type=float, default=TAKE_KEEP_DAYS, metavar="DAYS",
@@ -315,15 +328,9 @@ class NewsSession:
 def build_news_session(character, char, args):
     """BuildNewsSession Resolves region/lang/labels/backend from the Character and Args,
        then Returns a Session."""
-    region = (args.region or os.environ.get("WHONEWS_REGION")
-              or NATIONALITY_REGION.get(char.get("nationality"), DEFAULT_REGION))
-    lang = (args.lang or os.environ.get("WHONEWS_LANG")
-            or LANGUAGE_CODE.get(char.get("language"), DEFAULT_LANG))
-    query = args.query
-    if not args.topic and not query:
-        query = char.get("topic")
-    news_label, joke_label, anecdote_label, signature_label = LABELS.get(
-        char.get("language"), LABELS["Spanish"])
+    region, lang = resolve_news_locale(char, args)
+    query = resolve_news_query(char, args)
+    labels = resolve_news_labels(char)
     db = None if args.no_cache else open_news_cache(args.db, args.prune)
 
     return NewsSession(
@@ -336,16 +343,39 @@ def build_news_session(character, char, args):
         region=region,
         lang=lang,
         query=query,
-        news_label=news_label,
-        joke_label=joke_label,
-        anecdote_label=anecdote_label,
-        signature_label=signature_label,
+        news_label=labels[0],
+        joke_label=labels[1],
+        anecdote_label=labels[2],
+        signature_label=labels[3],
         backend=build_model_backend(args),
         size=whocast.pick_size(args.size),
         mode=whocast.pick_mode(args.mode),
         width=args.width,
         db=db,
     )
+
+
+def resolve_news_locale(char, args):
+    """ResolveNewsLocale Returns the Region and Language requested for one Character."""
+    region = (args.region or os.environ.get("WHONEWS_REGION")
+              or NATIONALITY_REGION.get(char.get("nationality"), DEFAULT_REGION))
+    lang = (args.lang or os.environ.get("WHONEWS_LANG")
+            or LANGUAGE_CODE.get(char.get("language"), DEFAULT_LANG))
+    return region, lang
+
+
+def resolve_news_query(char, args):
+    """ResolveNewsQuery Returns an explicit Query or a random Character Topic."""
+    if args.topic or args.query:
+        return args.query
+
+    topics = char.get("topics", [])
+    return random.choice(topics) if topics else None
+
+
+def resolve_news_labels(char):
+    """ResolveNewsLabels Returns the four Story Labels in the Character's Language."""
+    return LABELS.get(char.get("language"), LABELS["Spanish"])
 
 
 def run_signature_command(session):
@@ -365,7 +395,8 @@ def run_anecdote_command(session, requested):
     if not cast:
         print("whonews: no character to tell an anecdote with", file=sys.stderr)
         return 1
-    print_title(session.mode, session.anecdote_label.format(session.display_name))
+    title = session.anecdote_label.format(session.display_name, cast)
+    print_title(session.mode, title)
     take = render_take_safely(
         render_character_anecdote, session.backend,
         session.persona, cast, session.backend, session.display_name)
@@ -425,15 +456,28 @@ def run_news_command(session, args):
     if args.headlines:
         return print_random_headline(session, stories)
 
-    others = [c for c in whocast.list_characters() if c != session.character]
-    if session.signature and random.random() < args.signature_chance:
+    command = choose_news_command(session, args)
+    if command == "signature":
         return run_signature_command(session)
-    if others and random.random() < args.anecdote_chance:
+    if command == "anecdote":
         return run_anecdote_command(session, None)
-    if random.random() < args.joke_chance:
+    if command == "joke":
         return run_joke_command(session)
 
     return run_opine_command(session, args, stories)
+
+
+def choose_news_command(session, args):
+    """ChooseNewsCommand Returns a random Story kind, defaulting to an Opinion."""
+    others = [name for name in whocast.list_characters()
+              if name != session.character]
+    if session.signature and random.random() < args.signature_chance:
+        return "signature"
+    if others and random.random() < args.anecdote_chance:
+        return "anecdote"
+    if random.random() < args.joke_chance:
+        return "joke"
+    return "opinion"
 
 
 def fetch_daily_stories(session, args):
@@ -579,6 +623,33 @@ def open_news_cache(path, prune_days=TAKE_KEEP_DAYS):
 def clear_stale_feeds(db):
     """ClearStaleFeeds Deletes cached feed Rows older than FEED_KEEP."""
     db.execute("DELETE FROM feeds WHERE fetched_at < ?", (time.time() - FEED_KEEP,))
+
+
+def clear_news_command(args):
+    """ClearNewsCommand Clears the selected Cache and Reports the Result."""
+    db = open_news_cache(args.db, prune_days=0)
+    if db is None:
+        return 1
+
+    cleared = clear_news_cache(db)
+    db.close()
+    if not cleared:
+        print("whonews: could not clear cache", file=sys.stderr)
+        return 1
+
+    print("whonews: cache cleared")
+    return 0
+
+
+def clear_news_cache(db):
+    """ClearNewsCache Removes every cached Feed and archived Take."""
+    try:
+        db.executescript("DELETE FROM feeds; DELETE FROM takes;")
+        db.commit()
+        return True
+    except sqlite3.Error:
+        db.rollback()
+        return False
 
 
 def prune_old_takes(db, days):
@@ -854,7 +925,7 @@ def clean_model_reply(text, display_name):
     """CleanModelReply Strips think-tags, name/label prefixes and padding,
        then Returns the first real Line."""
     # Models sometimes echo the character's name, or a generic label, before
-    # the actual line ("Carmen Gloria: ...", "Opinión: ...") — strip it.
+    # the actual line ("TV Judge: ...", "Opinión: ...") — strip it.
     label = r"{}|{}".format(re.escape(display_name), GENERIC_LABEL)
     line_re = re.compile(r"^\W*(?:{})\s*:?\W*$".format(label), re.I)
     prefix_re = re.compile(r"^(?:{})\s*:\s*".format(label), re.I)

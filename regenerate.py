@@ -7,12 +7,12 @@ Use this to change a character's photo, crop, or conversion parameters, or
 to add a brand-new character.
 
     pip install pillow numpy
-    python3 regenerate.py photo.png --character carmen_gloria --crop 545 60 880 560
+    python3 regenerate.py photo.png --character tv_judge --crop 545 60 880 560
 
 The script writes characters/<character>/art.blob. For a new character, also
 create characters/<character>/character.json with display_name, nationality,
-topic, language, persona, joke_prompt and (optionally) a fallback line — see
-characters/carmen_gloria/ for an example.
+topics, language, persona, joke_prompt and (optionally) a fallback line — see
+characters/tv_judge/ for an example.
 """
 import argparse
 import base64
@@ -76,15 +76,15 @@ def parse_regenerate_args():
     parser = argparse.ArgumentParser(
         description="Regenerate a whosay character's art",
         epilog="example:\n"
-               "  python3 regenerate.py photo.png --character carmen_gloria "
+               "  python3 regenerate.py photo.png --character tv_judge "
                "--crop 545 60 880 560\n"
-               "  python3 regenerate.py photo.png --character ozzy --no-crop "
+               "  python3 regenerate.py photo.png --character prince_of_darkness --no-crop "
                "--resample bilinear",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("imagen", help="source PNG (ideally with transparent background)")
-    parser.add_argument("--character", default="carmen_gloria",
-                         help="character folder under characters/ (default carmen_gloria)")
+    parser.add_argument("--character", default="tv_judge",
+                         help="character folder under characters/ (default tv_judge)")
     parser.add_argument("--crop", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"),
                          default=[545, 60, 880, 560], help="crop region; use --no-crop to skip")
     parser.add_argument("--no-crop", action="store_true",

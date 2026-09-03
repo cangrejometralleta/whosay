@@ -83,14 +83,20 @@ def load_character_art(character, size, mode):
     mode: 'mono' | 'block' | 'ansi'
     """
     if character not in _art_cache:
-        path = os.path.join(resolve_characters_dir(), character, "art.blob")
-        try:
-            with open(path, encoding="ascii") as f:
-                blob = f.read()
-        except OSError:
-            raise CharacterNotFound(describe_unknown_character(character))
-        _art_cache[character] = json.loads(zlib.decompress(base64.b64decode(blob)))
+        _art_cache[character] = decode_character_art(character)
     return _art_cache[character][size][mode]
+
+
+def decode_character_art(character):
+    """DecodeCharacterArt Reads and Decodes one Character's portrait Bundle."""
+    path = os.path.join(resolve_characters_dir(), character, "art.blob")
+    try:
+        with open(path, encoding="ascii") as stream:
+            blob = stream.read()
+    except OSError:
+        raise CharacterNotFound(describe_unknown_character(character))
+
+    return json.loads(zlib.decompress(base64.b64decode(blob)))
 
 
 def describe_unknown_character(name):
@@ -149,32 +155,41 @@ def print_character_panel(text, portrait, size, width=DEFAULT_WIDTH, think=False
 def render_speech_bubble(text, width=DEFAULT_WIDTH, think=False):
     """RenderSpeechBubble Wraps text to width,
        then Returns the cowsay-style Lines of a speech/thought bubble."""
-    paras = text.expandtabs().split("\n")
-    lines = []
-    for p in paras:
-        wrapped = textwrap.wrap(p, width) if p.strip() else [""]
-        lines.extend(wrapped)
-    if not lines:
-        lines = [""]
-    w = max(len(l) for l in lines)
+    lines = wrap_bubble_text(text, width)
+    span = max(len(line) for line in lines)
 
-    out = [" " + "_" * (w + 2)]
+    body = render_bubble_body(lines, span, think)
+    return [" " + "_" * (span + 2), *body, " " + "-" * (span + 2)]
+
+
+def wrap_bubble_text(text, width):
+    """WrapBubbleText Wraps every Paragraph while Preserving empty Lines."""
+    lines = []
+    for paragraph in text.expandtabs().split("\n"):
+        wrapped = textwrap.wrap(paragraph, width) if paragraph.strip() else [""]
+        lines.extend(wrapped)
+
+    return lines or [""]
+
+
+def render_bubble_body(lines, span, think):
+    """RenderBubbleBody Frames wrapped Lines as Speech or Thought."""
     if think:
-        for l in lines:
-            out.append("( {} )".format(l.ljust(w)))
-    elif len(lines) == 1:
-        out.append("< {} >".format(lines[0].ljust(w)))
-    else:
-        for i, l in enumerate(lines):
-            if i == 0:
-                a, b = "/", "\\"
-            elif i == len(lines) - 1:
-                a, b = "\\", "/"
-            else:
-                a, b = "|", "|"
-            out.append("{} {} {}".format(a, l.ljust(w), b))
-    out.append(" " + "-" * (w + 2))
-    return out
+        return ["( {} )".format(line.ljust(span)) for line in lines]
+    if len(lines) == 1:
+        return ["< {} >".format(lines[0].ljust(span))]
+
+    return [frame_bubble_line(line, index, len(lines), span)
+            for index, line in enumerate(lines)]
+
+
+def frame_bubble_line(line, index, count, span):
+    """FrameBubbleLine Chooses Borders for one Line in a multiline Bubble."""
+    borders = ("/", "\\") if index == 0 else ("|", "|")
+    if index == count - 1:
+        borders = ("\\", "/")
+
+    return "{} {} {}".format(borders[0], line.ljust(span), borders[1])
 
 
 def render_bubble_tail(think, indent):

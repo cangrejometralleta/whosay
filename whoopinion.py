@@ -11,7 +11,7 @@ Usage:
     whoopinion "are tabs better than spaces?"
     echo "why is the sky blue?" | whoopinion
     whoopinion -C horseshoe_crab "should I flip you over?"
-    git log -1 --format=%s | whoopinion -C ozzy -b
+    git log -1 --format=%s | whoopinion -C prince_of_darkness -b
     whoopinion --provider anthropic "is this a good idea?"
 
 The question comes from the command line, or from stdin when the command
@@ -99,12 +99,9 @@ def main(argv=None):
         return 1
 
     try:
-        character = resolve_character_choice(args)
-        char = whocast.load_character(character)
-        size, mode = whocast.pick_size(args.size), whocast.pick_mode(args.mode)
-        portrait = whocast.load_character_art(character, size, mode)
-    except whocast.CharacterNotFound as e:
-        print("whoopinion: {}".format(e), file=sys.stderr)
+        char, portrait, size, mode = load_answering_cast(args)
+    except whocast.CharacterNotFound as error:
+        print("whoopinion: {}".format(error), file=sys.stderr)
         return 1
 
     print_question_title(mode, resolve_opinion_label(char), question)
@@ -112,6 +109,19 @@ def main(argv=None):
 
     whocast.print_character_panel(answer, portrait, size, args.width, args.think)
     return 0
+
+
+def load_answering_cast(args):
+    """LoadAnsweringCast Resolves one Character and its Look,
+       then Returns everything the opinion Script needs."""
+    character = resolve_character_choice(args)
+    char = whocast.load_character(character)
+
+    size = whocast.pick_size(args.size)
+    mode = whocast.pick_mode(args.mode)
+    portrait = whocast.load_character_art(character, size, mode)
+
+    return char, portrait, size, mode
 
 
 def parse_whoopinion_args(argv):

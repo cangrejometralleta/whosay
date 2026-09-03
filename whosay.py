@@ -59,18 +59,32 @@ def main(argv=None):
         return print_character_roster()
 
     try:
-        character = resolve_character_choice(args)
-        size = whocast.pick_size(args.size)
-        portrait = whocast.load_character_art(character, size, whocast.pick_mode(args.mode))
-    except whocast.CharacterNotFound as e:
-        print("whosay: {}".format(e), file=sys.stderr)
+        portrait, size = load_spokesperson(args)
+    except whocast.CharacterNotFound as error:
+        print("whosay: {}".format(error), file=sys.stderr)
         return 1
 
+    return print_spoken_panel(args, portrait, size)
+
+
+def load_spokesperson(args):
+    """LoadSpokesperson Resolves the Character and Look,
+       then Returns its Portrait and Size."""
+    character = resolve_character_choice(args)
+    size = whocast.pick_size(args.size)
+    mode = whocast.pick_mode(args.mode)
+
+    return whocast.load_character_art(character, size, mode), size
+
+
+def print_spoken_panel(args, portrait, size):
+    """PrintSpokenPanel Prints the Portrait alone or carrying the requested Words."""
     if args.plain:
         print("\n".join(portrait))
         return 0
 
-    whocast.print_character_panel(read_spoken_text(args), portrait, size, args.width, args.think)
+    text = read_spoken_text(args)
+    whocast.print_character_panel(text, portrait, size, args.width, args.think)
     return 0
 
 
@@ -81,8 +95,8 @@ def parse_whosay_args(argv):
         prog="whosay",
         description="Like cowsay, but with a cast of characters.",
         epilog="example:\n"
-               "  whosay -C ozzy 'bloody hell'\n"
-               "  echo 'what a scorcher' | whosay -C carmen_gloria -a -b\n"
+               "  whosay -C prince_of_darkness 'bloody hell'\n"
+               "  echo 'what a scorcher' | whosay -C tv_judge -a -b\n"
                "  whosay --random -t 'is this thing on?'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
