@@ -17,6 +17,7 @@ the GNU tradition rather than a public figure's likeness.
 python3 whosay.py "Hello, good afternoon"
 echo "text from a pipe" | python3 whosay.py
 git log -1 --format=%s | python3 whosay.py -b
+fortune | python3 whosay.py -C st_ignucius        # any command that prints text works
 python3 whosay.py -C some_other_character "hi"   # always the same one
 python3 whosay.py --list-characters
 ```
